@@ -1,9 +1,8 @@
 import discord
+import os
 from datetime import datetime
 
 print("Starting...")
-
-TOKEN = 'MTE5NzA4NDUyMTY0NDk2MTkxMw.Gs0OZF.geNMS7R3eufKSqSquFB6YiTgkcB8HmDSDmHy0E'
 
 class MyClient(discord.Client):
     async def on_ready(self):
@@ -58,4 +57,5 @@ class MyClient(discord.Client):
 intents = discord.Intents.default()
 intents.message_content = True
 client = MyClient(intents=intents)
-client.run(TOKEN)
+access_token = os.environ["BOT_TOKEN"]
+client.run(access_token)
