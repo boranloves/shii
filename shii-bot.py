@@ -6,7 +6,7 @@ import sys
 
 print("Starting...")
 
-TOKEN = os.environ['TOKEN']
+TOKEN = 'MTE5NzA4NDUyMTY0NDk2MTkxMw.Gs0OZF.geNMS7R3eufKSqSquFB6YiTgkcB8HmDSDmHy0E'
 
 class MyClient(discord.Client):
     async def on_ready(self):
