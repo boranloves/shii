@@ -9,7 +9,7 @@ import random
 
 
 
-TOKEN = 'MTE5NzA4NDUyMTY0NDk2MTkxMw.GsqMR8.00_X71IYpPtmnvFnojSR2n9JcEnc0NHGROKBLw'
+TOKEN = 'TOKEN'
 
 
 intents = discord.Intents.all()
