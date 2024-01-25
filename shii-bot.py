@@ -1,12 +1,8 @@
 import discord 
 from datetime import datetime
-from discord import message
-import os
-import sys
 import discord
 from discord.ext import commands
 from datetime import datetime
-import sys
 import os
 import random
 
