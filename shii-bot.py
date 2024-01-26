@@ -1,135 +1,123 @@
-import discord 
-from datetime import datetime
 import discord
 from discord.ext import commands
 from datetime import datetime
-import os
 import random
 
+class Bot(commands.Bot):
+    def __init__(self, intents: discord.Intents, **kwargs):
+        super().__init__(command_prefix="/", intents=intents, case_insensitive=True)
 
-
-
-TOKEN = 'TOKEN'
-
+    async def on_ready(self):
+        print(f"Logged in as {self.user}")
+        await self.change_presence(status=discord.Status.online, activity=discord.Game("출근"))
+        await self.tree.sync()
 
 intents = discord.Intents.all()
-intents.message_content = True
-bot = commands.Bot(
-    command_prefix=commands.when_mentioned_or("/"),
-    description='Relatively simple music bot example',
-    intents=intents,
-)
+bot = Bot(intents=intents)
+
+@bot.hybrid_command(name='hello', description="hi!")
+async def hello(interaction: discord.Interaction):
+    await interaction.reply(content="하이")
 
 
-@bot.event
-async def on_ready():
-    print(f'{bot.user}이(가) 로그인했습니다.')
-    keep_alive()
+@bot.hybrid_command(name='bye', description="bye!")
+async def bye(interaction: discord.Interaction):
+    await interaction.reply(content="빠이")
 
 
-# /embed 명령어에 대한 코드
-@bot.command()
-async def embed(ctx):
-    embed = discord.Embed(title="shii-bot", description="made by 보란이", color=0xAAFFFF)
-    embed.add_field(name="사용가능 명령어", value="/s, /embed, /hello, /bye, /c, /clear, /roll, /mining, /game", inline=False)
-    embed.add_field(name="사용법", value="/를 사용하여 불러주세요!", inline=False)
-    embed.set_footer(text="개발중")
-    embed.set_footer(text="패치버전: 1.1.0")
-    await ctx.send(embed=embed)
+@bot.hybrid_command(name='copy', description="write along the message")
+async def copy(interaction: discord.Interaction, text1: str):
+    await interaction.send(text1)
 
 
-@bot.command()
-async def roll(ctx):
-    randnum = random.randint(1, 6)  # 1이상 6이하 랜덤 숫자를 뽑음
-    await ctx.send(f'주사위 결과는 {randnum} 입니다.')
+@bot.hybrid_command(name='clear', description="message cleaning")
+async def clear(interaction: discord.Interaction, amount: int):
+    if not interaction.guild:
+        await interaction.send("DM에서는 사용이 불가능한 명령어입니다!")
+        return
+
+    channel = interaction.channel
+    await channel.purge(limit=amount)
+    await interaction.channel.send(f"{amount}개의 메시지를 삭제했어요!")
+    print(f"{amount}개의 메시지를 삭제했어요!")
 
 
-@bot.command()
-async def mining(ctx):
-    minerals = ['다이아몬드', '루비', '에메랄드', '자수정', '철', '석탄']
-    weights = [1, 3, 6, 15, 25, 50]
-    results = random.choices(minerals, weights=weights, k=1)  # 광물 5개를 가중치에 따라 뽑음
-    await ctx.send(', '.join(results) + ' 광물들을 획득하였습니다.')
-
-
-# 음성채널입장 명령어에 대한 코드
-@bot.command()
-async def start(ctx):
-    if ctx.author.voice and ctx.author.voice.channel:
-        channel = ctx.author.voice.channel
-        await ctx.send(f"봇이 {channel} 채널에 입장합니다.")
+@bot.hybrid_command(name='start', description="음성 채널 입장")
+async def start(interaction: discord.Interaction):
+    if interaction.author.voice and interaction.author.voice.channel:
+        channel = interaction.author.voice.channel
+        await interaction.send(f"봇이 {channel} 채널에 입장합니다.")
         await channel.connect()
-        print(f"음성 채널 정보: {ctx.author.voice}")
-        print(f"음성 채널 이름: {ctx.author.voice.channel}")
+        print(f"음성 채널 정보: {interaction.author.voice}")
+        print(f"음성 채널 이름: {interaction.author.voice.channel}")
     else:
-        await ctx.send("음성 채널에 유저가 존재하지 않습니다. 1명 이상 입장해 주세요.")
+        await interaction.send("음성 채널에 유저가 존재하지 않습니다. 1명 이상 입장해 주세요.")
 
 
-@bot.command()
-async def game(ctx, user: str):  # user:str로 !game 다음에 나오는 메시지를 받아줌
+@bot.hybrid_command(name='stop', description="음성 채널 퇴장")
+async def stop(interaction: discord.Interaction):
+    try:
+        # 음성 채널에서 봇을 내보냅니다.
+        await interaction.voice_client.disconnect()
+        await interaction.send(f"봇을 {interaction.author.voice.channel} 에서 내보냈습니다.")
+    except IndexError as error_message:
+        print(f"에러 발생: {error_message}")
+        await interaction.send(f"{interaction.author.voice.channel}에 유저가 존재하지 않거나 봇이 존재하지 않습니다.\\n다시 입장후 퇴장시켜주세요.")
+    except AttributeError as not_found_channel:
+        print(f"에러 발생: {not_found_channel}")
+        await interaction.send("봇이 존재하는 채널을 찾는 데 실패했습니다.")
+
+
+@bot.hybrid_command(name='game', description="가위바위보!")
+async def game(interaction: discord.Interaction, user: str):  # user:str로 !game 다음에 나오는 메시지를 받아줌
     rps_table = ['가위', '바위', '보']
     bot = random.choice(rps_table)
     result = rps_table.index(user) - rps_table.index(bot)  # 인덱스 비교로 결과 결정
     if result == 0:
-        await ctx.send(f'{user} vs {bot}  비겼당.')
+        await interaction.send(f'{user} vs {bot}  비겼당.')
+        print(f'{user} vs {bot}  비겼당.')
     elif result == 1 or result == -2:
-        await ctx.send(f'{user} vs {bot}  졌당.')
+        await interaction.send(f'{user} vs {bot}  졌당.')
+        print(f'{user} vs {bot}  졌당.')
     else:
-        await ctx.send(f'{user} vs {bot}  내가 이겼당~.')
+        await interaction.send(f'{user} vs {bot}  내가 이겼당~.')
+        print(f'{user} vs {bot}  내가 이겼당~.')
 
 
-# 음성채널퇴장 명령어에 대한 코드
-@bot.command()
-async def stop(ctx):
-    try:
-        # 음성 채널에서 봇을 내보냅니다.
-        await ctx.voice_client.disconnect()
-        await ctx.send(f"봇을 {ctx.author.voice.channel} 에서 내보냈습니다.")
-    except IndexError as error_message:
-        print(f"에러 발생: {error_message}")
-        await ctx.send(f"{ctx.author.voice.channel}에 유저가 존재하지 않거나 봇이 존재하지 않습니다.\\n다시 입장후 퇴장시켜주세요.")
-    except AttributeError as not_found_channel:
-        print(f"에러 발생: {not_found_channel}")
-        await ctx.send("봇이 존재하는 채널을 찾는 데 실패했습니다.")
+@bot.hybrid_command(name='mining', description="광질을 하자")
+async def mining(interaction: discord.Interaction):
+    minerals = ['다이아몬드', '루비', '에메랄드', '자수정', '철', '석탄']
+    weights = [1, 3, 6, 15, 25, 50]
+    results = random.choices(minerals, weights=weights, k=3)  # 광물 3개를 가중치에 따라 뽑음
+    await interaction.send(', '.join(results) + ' 광물들을 획득하였습니다.')
+    print(', '.join(results) + ' 광물들을 획득하였습니다.')
 
 
-# clear 명령어에 대한 코드
-@bot.command()
-async def clear(ctx, amount: int):
-    await ctx.channel.purge(limit=amount)
-    await ctx.send(f"{amount}개의 메시지를 삭제했어요!")
+@bot.hybrid_command(name='roll', description="주사위 굴리기")
+async def roll(interaction: discord.Interaction):
+    randnum = random.randint(1, 6)  # 1이상 6이하 랜덤 숫자를 뽑음
+    await interaction.send(f'주사위 결과는 {randnum} 입니다.')
+    print(f'주사위 결과는 {randnum} 입니다.')
 
 
-# c 명령어에 대한 코드
-@bot.command()
-async def c(ctx, text2):
-    await ctx.send(text2)
+@bot.hybrid_command(name='embed', description="프로필")
+async def embed(interaction: discord.Interaction):
+    embed = discord.Embed(title="shii-bot", description="made by 보란이", color=0xAAFFFF)
+    embed.add_field(name="사용가능 명령어", value="/say, /embed, /hello, /bye, /copy, /clear, /roll, /mining, /game", inline=False)
+    embed.add_field(name="사용법", value="/를 사용하여 불러주세요!", inline=False)
+    embed.add_field(name="호스팅", value="구글 클라우드 플렛폼(GCP)", inline=False)
+    embed.set_footer(text="패치버전: 2.2.0")
+    await interaction.send(embed=embed)
 
 
-# hello 명령어에 대한 코드
-@bot.command()
-async def hello(ctx):
-    await ctx.reply('하이!')
-
-
-# bye 명령어에 대한 코드
-@bot.command()
-async def bye(ctx):
-    await ctx.reply('ㅃ2')
-
-
-# s 명령어에 대한 코드
-@bot.command()
-async def s(ctx, text1):
-    print(ctx, text1)
-    question = text1
-    # 사용자 정의 함수 get_answer를 사용하여 답변을 받아옵니다.
+@bot.hybrid_command(name='say', description="shii-bot 전용 명령어")
+async def say(interaction: discord.Interaction, text: str):
+    print(interaction, text)
+    question = text
     answer = get_answer(question)
-    await ctx.send(answer)
+    await interaction.send(answer)
     print(answer)
 
-
-# 일부 유틸리티 함수
 def get_day_of_week():
     weekday_list = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
 
@@ -155,8 +143,8 @@ def get_answer(text):
         '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
         'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
         '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
-        '버전정보': '패치버전 1.1.0',
-        '패치노트': '패치노트 1.1.0 신규기능: 코드 구조 교체 작업 밎 명령어 변경, 명령어 추가 및 대화 추가',
+        '버전정보': '패치버전 2.2.0',
+        '패치노트': '패치노트 2.2.0 신규기능: 슬래시 커멘드로 이식 작업',
         '과자': '음...과자하니까 과자 먹고 싶당',
         '뭐해?': '음.....일하죠 일! 크흠',
         '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
@@ -182,7 +170,8 @@ def get_answer(text):
         '애니': '~개발자왈~ 백성녀와 흑목사는 꼭 봐라',
         '축구경기': '축구 경기 연동 기능은 현재 개발중 입니다. 빠른 시일내에 완성 하겠습니다!',
         'help': '저와 대화 하실려면 /s 뒤에 질문을 넣어 불러주세요!',
-        '음악': '우리 개발자님은 류현준님의 노래를 좋아한데요. 네, TMI네용'
+        '음악': '우리 개발자님은 류현준님의 노래를 좋아한데요. 네, TMI네용',
+        'GCP': '드.디.어! shii-bot이 24시간 돌아간답니다!'
     }
 
     if trim_text == '' or None:
@@ -201,6 +190,4 @@ def get_answer(text):
     return text + "은(는) 없는 질문입니다."
 
 
-
-if __name__ == "__main__":
-    bot.run(TOKEN)
+bot.run('TOKEN')
