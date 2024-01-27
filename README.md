@@ -20,3 +20,6 @@
 
 ## shii-bot 바로 초대 하기
 -https://discord.com/api/oauth2/authorize?client_id=1197084521644961913&permissions=8&scope=bot+applications.commands                            
+
+## 개인 정보 처리 방침
+-https://github.com/boranloves/shii-bot-discord/blob/main/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4%EC%B2%98%EB%A6%AC%EB%B0%A9%EC%B9%A8.txt
