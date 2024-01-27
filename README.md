@@ -10,7 +10,7 @@
 /hello, bye: 인사                            
 
 ## 패치버전
--v2.2.1-alpha                            
+-v2.3.0                          
 
 ## shii-bot 공식 사이트
 -https://litt.ly/shii_bot_boran                            
