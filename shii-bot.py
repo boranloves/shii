@@ -11,7 +11,7 @@ class Bot(commands.Bot):
 
     async def on_ready(self):
         print(f"Logged in as {self.user}")
-        await self.change_presence(status=discord.Status.online, activity=discord.Game("출근"))
+        await self.change_presence(status=discord.Status.online, activity=discord.Activity(type=discord.ActivityType.listening, name="류현준 난간"))
         await self.tree.sync()
 
         if not os.path.exists(attendance_file):
@@ -157,7 +157,8 @@ async def embed(interaction: discord.Interaction):
     embed.add_field(name="사용가능 명령어", value="/say, /embed, /hello, /bye, /copy, /clear, /roll, /mining, /game, /출첵, /누적 출석 수", inline=False)
     embed.add_field(name="사용법", value="/를 사용하여 불러주세요!", inline=False)
     embed.add_field(name="호스팅", value="구글 클라우드 플렛폼(GCP)", inline=False)
-    embed.set_footer(text="패치버전: 2.2.1")
+    embed.add_field(name="패치버전", value="v2.2.1-aplha", inline=False)
+    embed.set_footer(text="개인 정보 처리 방침: https://github.com/boranloves/shii-bot-discord/blob/main/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4%EC%B2%98%EB%A6%AC%EB%B0%A9%EC%B9%A8.txt")
     await interaction.send(embed=embed)
 
 
@@ -225,6 +226,7 @@ def get_answer(text):
         'GCP': '드.디.어! shii-bot이 24시간 돌아간답니다!',
         '뭐야': '뭐지?',
         '잘가': '잘가요!',
+        '뭐들어?': '앗, 류현준님의 난간이욧!'
     }
 
     if trim_text == '' or None:
