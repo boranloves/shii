@@ -1,9 +1,13 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from datetime import datetime
 import random
 import json
 import os
+import asyncio
+from youtube_search import YoutubeSearch
+import sympy
+
 
 class Bot(commands.Bot):
     def __init__(self, intents: discord.Intents, **kwargs):
@@ -14,56 +18,94 @@ class Bot(commands.Bot):
         await self.change_presence(status=discord.Status.online, activity=discord.Activity(type=discord.ActivityType.listening, name="류현준 난간"))
         await self.tree.sync()
 
-        if not os.path.exists(attendance_file):
-            with open(attendance_file, 'w') as file:
+        if not os.path.exists(ATTENDANCE_FILE):
+            with open(ATTENDANCE_FILE, 'w') as file:
                 json.dump({}, file)
 
-attendance_file = 'attendance.json'
+
+ATTENDANCE_FILE = 'attendance.json'
 intents = discord.Intents.all()
 bot = Bot(intents=intents)
 
 
-@bot.hybrid_command(name='출첵', description="출첵!")
-async def attendance(interaction: discord.Interaction):
-    user_id = str(interaction.author.id)
+@tasks.loop(seconds=60)  # 매분마다 실행되도록 설정
+async def reset_attendance():
+    now = datetime.now()
 
-    # 출석 정보 로드
-    with open(attendance_file, 'r') as file:
-        all_attendance_data = json.load(file)
+    # 자정에 출석 기회 초기화
+    if now.hour == 0 and now.minute == 0:
+        reset_attendance_opportunity()
 
-    # 서버마다 다른 출석 데이터 가져오기
-    server_attendance_data = all_attendance_data.get(str(interaction.guild.id), {})
 
-    # 이미 출석한 경우
-    if user_id in server_attendance_data:
-        await interaction.send(f'{interaction.author.mention} 이미 출석하셨습니다.')
+def reset_attendance_opportunity():
+    # 출석 정보를 저장한 파일에서 서버별 출석 정보를 불러옴
+    try:
+        with open(ATTENDANCE_FILE, 'r') as file:
+            attendance_data = json.load(file)
+    except FileNotFoundError:
+        attendance_data = {}
+
+    # 서버별 출석 정보를 초기화
+    for guild_id in attendance_data.keys():
+        attendance_data[guild_id]['attendance_opportunity'] = 1
+
+    # 초기화된 출석 정보를 파일에 저장
+    with open(ATTENDANCE_FILE, 'w') as file:
+        json.dump(attendance_data, file)
+
+
+@bot.command(name='누적출석수', description="누적 출석 수 확인")
+async def attendance_info(interaction: discord.Interaction):
+    # 서버 ID
+    guild_id = str(interaction.guild.id)
+
+    # 출석 정보를 저장한 파일에서 서버별 출석 정보를 불러옴
+    try:
+        with open(ATTENDANCE_FILE, 'r') as file:
+            attendance_data = json.load(file)
+    except FileNotFoundError:
+        attendance_data = {}
+
+    # 서버가 등록되어 있지 않다면 메시지 출력
+    if guild_id not in attendance_data:
+        response = '해당 서버의 출석 정보가 없습니다.'
     else:
-        # 출석 기록
-        server_attendance_data[user_id] = True
+        attendance_count = attendance_data[guild_id]['attendance_count']
+        attendance_opportunity = attendance_data[guild_id]['attendance_opportunity']
+        response = f'누적 출석 횟수: {attendance_count}'
 
-        # 출석 메시지 전송
-        await interaction.send(f'{interaction.author.mention} 출석하셨습니다!')
+    await interaction.send(response)
 
-        # 서버마다 다른 출석 데이터 갱신
-        all_attendance_data[str(interaction.guild.id)] = server_attendance_data
 
-        # 출석 정보 저장
-        with open(attendance_file, 'w') as file:
-            json.dump(all_attendance_data, file)
+@bot.hybrid_command(name='출첵', description="출첵!")
+async def attend(interaction: discord.Interaction):
+    # 서버 ID
+    guild_id = str(interaction.guild.id)
 
-# 누적 출석 수 확인 명령어
-@bot.hybrid_command(name='누적출석수', description="출첵 현황 보기")
-async def total_attendance(interaction: discord.Interaction):
-    # 서버마다 다른 출석 데이터 가져오기
-    with open(attendance_file, 'r') as file:
-        all_attendance_data = json.load(file)
+    # 출석 정보를 저장한 파일에서 서버별 출석 정보를 불러옴
+    try:
+        with open(ATTENDANCE_FILE, 'r') as file:
+            attendance_data = json.load(file)
+    except FileNotFoundError:
+        attendance_data = {}
 
-    server_attendance_data = all_attendance_data.get(str(interaction.guild.id), {})
+    # 서버가 등록되어 있지 않다면 추가
+    if guild_id not in attendance_data:
+        attendance_data[guild_id] = {'attendance_opportunity': 1, 'attendance_count': 0}
 
-    # 누적 출석 수 계산
-    total_attendance = sum(server_attendance_data.values())
+    # 출석 기회가 남아있으면 출석 처리
+    if attendance_data[guild_id]['attendance_opportunity'] > 0:
+        attendance_data[guild_id]['attendance_count'] += 1
+        attendance_data[guild_id]['attendance_opportunity'] -= 1
+        response = f'{interaction.author.mention}, 출석이 완료되었습니다. 출석 횟수: {attendance_data[guild_id]["attendance_count"]}'
+    else:
+        response = f'{interaction.author.mention}, 이미 출석하셨습니다.'
 
-    await interaction.send(f'{interaction.author.mention} {interaction.guild.name}의 누적 출석 수: {total_attendance}')
+    # 출석 정보를 파일에 저장
+    with open(ATTENDANCE_FILE, 'w') as file:
+        json.dump(attendance_data, file)
+
+    await interaction.send(response)
 
 
 @bot.hybrid_command(name='hello', description="hi!")
@@ -76,12 +118,33 @@ async def bye(interaction: discord.Interaction):
     await interaction.reply(content="빠이")
 
 
-@bot.hybrid_command(name='copy', description="write along the message")
+@bot.hybrid_command(name='copy', description="메세지 복제")
 async def copy(interaction: discord.Interaction, text1: str):
     await interaction.send(text1)
 
 
-@bot.hybrid_command(name='clear', description="message cleaning")
+@bot.hybrid_command(name='유튜브검색', description="유튜브 검색(베타)")
+async def youtube_search(interaction: discord.Interaction, *, query: str):
+    results = YoutubeSearch(query, max_results=1).to_dict()
+
+    if results:
+        video_title = results[0]['title']
+        video_url = f"https://www.youtube.com/watch?v={results[0]['id']}"
+        await interaction.send(f'검색 결과: {video_title}\n링크: {video_url}')
+    else:
+        await interaction.send('검색 결과를 찾을 수 없습니다.')
+
+
+@bot.hybrid_command(name='계산', description="수식을 계산합니다.")
+async def calculate_expression(ctx, *, expression):
+    try:
+        result = sympy.sympify(expression)
+        await ctx.send(f'계산 결과: {result}')
+    except Exception as e:
+        await ctx.send(f'계산 중 오류가 발생했습니다: {e}')
+
+
+@bot.hybrid_command(name='clear', description="메세지 청소")
 async def clear(interaction: discord.Interaction, amount: int):
     if not interaction.guild:
         await interaction.send("DM에서는 사용이 불가능한 명령어입니다!")
@@ -93,8 +156,8 @@ async def clear(interaction: discord.Interaction, amount: int):
     print(f"{amount}개의 메시지를 삭제했어요!")
 
 
-@bot.hybrid_command(name='start', description="음성 채널 입장")
-async def start(interaction: discord.Interaction):
+@bot.hybrid_command(name='음성채널입장', description="음성 채널 입장")
+async def start1(interaction: discord.Interaction):
     if interaction.author.voice and interaction.author.voice.channel:
         channel = interaction.author.voice.channel
         await interaction.send(f"봇이 {channel} 채널에 입장합니다.")
@@ -105,8 +168,14 @@ async def start(interaction: discord.Interaction):
         await interaction.send("음성 채널에 유저가 존재하지 않습니다. 1명 이상 입장해 주세요.")
 
 
-@bot.hybrid_command(name='stop', description="음성 채널 퇴장")
-async def stop(interaction: discord.Interaction):
+@bot.hybrid_command(name='임베드생성', description="임베드생성기")
+async def send_server_announcement1(interaction: discord.Interaction, text: str, text1: str, text2: str, text3: str):
+    embed = discord.Embed(title=text, description=text1, color=0xAAFFFF)
+    embed.add_field(name=text2, value=text3, inline=False)
+    await interaction.send(embed=embed)
+
+@bot.hybrid_command(name='음성채널퇴장', description="음성 채널 퇴장")
+async def stop1(interaction: discord.Interaction):
     try:
         # 음성 채널에서 봇을 내보냅니다.
         await interaction.voice_client.disconnect()
@@ -151,15 +220,35 @@ async def roll(interaction: discord.Interaction):
     print(f'주사위 결과는 {randnum} 입니다.')
 
 
-@bot.hybrid_command(name='embed', description="프로필")
+@bot.hybrid_command(name='프로필', description="프로필")
 async def embed(interaction: discord.Interaction):
     embed = discord.Embed(title="shii-bot", description="made by 보란이", color=0xAAFFFF)
     embed.add_field(name="사용가능 명령어", value="/say, /embed, /hello, /bye, /copy, /clear, /roll, /mining, /game, /출첵, /누적 출석 수", inline=False)
     embed.add_field(name="사용법", value="/를 사용하여 불러주세요!", inline=False)
     embed.add_field(name="호스팅", value="구글 클라우드 플렛폼(GCP)", inline=False)
-    embed.add_field(name="패치버전", value="v2.2.1-aplha", inline=False)
+    embed.add_field(name="패치버전", value="v2.4.0", inline=False)
     embed.set_footer(text="개인 정보 처리 방침: https://github.com/boranloves/shii-bot-discord/blob/main/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4%EC%B2%98%EB%A6%AC%EB%B0%A9%EC%B9%A8.txt")
     await interaction.send(embed=embed)
+
+
+@bot.hybrid_command(name='타이머', description="타이머 실행(베타)")
+async def set_time(interaction: discord.Interaction, seconds: int, message='타이머 종료!'):
+    await interaction.send(f'{seconds}초 후에 알림이 옵니다.')
+    await asyncio.sleep(seconds)
+    await interaction.send(message)
+
+
+@bot.hybrid_command(name='인원통계', description="서버 인원 통계(베타)")
+async def member_stats(interaction: discord.Interaction):
+    guild = interaction.guild
+    total_members = guild.member_count
+
+    role_stats = {}
+    for role in guild.roles:
+        if role.name != '@everyone':
+            role_stats[role.name] = len(role.members)
+
+    await interaction.send(f'총 인원: {total_members}\n각 역할별 인원: {role_stats}')
 
 
 @bot.hybrid_command(name='say', description="shii-bot 전용 명령어")
@@ -195,8 +284,8 @@ def get_answer(text):
         '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
         'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
         '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
-        '버전정보': '패치버전 2.2.1',
-        '패치노트': '패치노트 2.2.1 신규기능: 출석 기능 및 누석 출석 수 커멘드 추가',
+        '버전정보': '패치버전 v2.4.0',
+        '패치노트': '패치노트 v2.4.0 신규기능: 출석 기능 및 누석 출석 삭제 및 커멘드, 베타 커멘드 추가',
         '과자': '음...과자하니까 과자 먹고 싶당',
         '뭐해?': '음.....일하죠 일! 크흠',
         '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
@@ -245,4 +334,4 @@ def get_answer(text):
     return text + "은(는) 없는 질문입니다."
 
 
-bot.run(TOKEN)
+bot.run(토큰)
