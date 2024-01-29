@@ -4,8 +4,7 @@
 /copy: 메세지 복제                            
 /game, mining, roll: 미니게임                            
 /clear: 메세지 청소                            
-/음성채널입장, 음성채널퇴장: 음성채널입장,퇴장(음성채널기능은 추후 업데이트 예정)                            
-/출첵, 누적출석수: 출석체크 및 누적출석수 확인                            
+/음성채널입장, 음성채널퇴장: 음성채널입장,퇴장(음성채널기능은 추후 업데이트 예정)                                                      
 /프로필: shii-bot 프로필                            
 /hello, bye: 인사                 
 
@@ -14,12 +13,14 @@
 /계산
 /임베드생성 
 /타이머
+/캡챠인증
+/인원통계
 
 ## 패치버전
--v2.4.0                          
+-v2.5.0                          
 
 ## shii-bot 공식 사이트
--https://litt.ly/shii_bot_boran                            
+-https://litt.ly/studio_boran                           
 
 ## shii-bot 공식 디스코드 서버
 -https://discord.gg/4kgq88ja                            
