@@ -7,6 +7,10 @@ import os
 import asyncio
 from youtube_search import YoutubeSearch
 import sympy
+import requests
+from PIL import Image, ImageDraw, ImageFont
+import io
+import string
 
 
 class Bot(commands.Bot):
@@ -18,94 +22,69 @@ class Bot(commands.Bot):
         await self.change_presence(status=discord.Status.online, activity=discord.Activity(type=discord.ActivityType.listening, name="류현준 난간"))
         await self.tree.sync()
 
-        if not os.path.exists(ATTENDANCE_FILE):
-            with open(ATTENDANCE_FILE, 'w') as file:
+        if not os.path.exists(attendance_file):
+            with open(attendance_file, 'w') as file:
                 json.dump({}, file)
 
 
-ATTENDANCE_FILE = 'attendance.json'
+attendance_file = 'attendance.json'
 intents = discord.Intents.all()
 bot = Bot(intents=intents)
+NAVER_CAPTCHA_API_KEY = '1'
+NAVER_CAPTCHA_SECRET_KEY = '1'
+NAVER_CAPTCHA_API_URL = 'https://openapi.naver.com/v1/captcha/nkey?code='
+NAVER_CAPTCHA_CHECK_URL = 'https://openapi.naver.com/v1/captcha/ncaptcha.bin?key='
 
 
-@tasks.loop(seconds=60)  # 매분마다 실행되도록 설정
-async def reset_attendance():
-    now = datetime.now()
+def generate_captcha():
+    width, height = 200, 100
+    image = Image.new('RGB', (width, height), color='white')
+    draw = ImageDraw.Draw(image)
 
-    # 자정에 출석 기회 초기화
-    if now.hour == 0 and now.minute == 0:
-        reset_attendance_opportunity()
+    font = ImageFont.load_default()  # 기본 폰트 사용
+    captcha_text = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+
+    draw.text((10, 30), captcha_text, font=font, fill='black')
+
+    image_bytes = io.BytesIO()
+    image.save(image_bytes, format='PNG')
+    return image_bytes.getvalue(), captcha_text
 
 
-def reset_attendance_opportunity():
-    # 출석 정보를 저장한 파일에서 서버별 출석 정보를 불러옴
+# Command for captcha authentication and role assignment
+@bot.hybrid_command(name='캡챠인증', description="네이버 api 이미지 캡챠 인증(베타)")
+async def authenticate(interaction: discord.Interaction):
+    # Discord 사용자에게 DM으로 캡챠 이미지 전송
+    captcha_image, captcha_text = generate_captcha()
+    await interaction.send(f"DM으로 캡챠 이미지가 발송 되었습니다. 1분 내로 입력해 주시기 바랍니다.")
+    await interaction.author.send(f"이미지 캡챠를 풀어주세요. 1분 내로 이미지에 보이는 문자를 입력하세요.")
+    await interaction.author.send(file=discord.File(io.BytesIO(captcha_image), filename='captcha.png'))
+
+    # 사용자로부터 응답 대기
+    def check(message):
+        return message.author == interaction.author and message.channel.type == discord.ChannelType.private
+
     try:
-        with open(ATTENDANCE_FILE, 'r') as file:
-            attendance_data = json.load(file)
-    except FileNotFoundError:
-        attendance_data = {}
+        user_response = await bot.wait_for('message', timeout=60.0, check=check)
+    except TimeoutError:
+        await interaction.author.send("시간이 초과되었습니다. 인증이 취소되었습니다.")
+        return
 
-    # 서버별 출석 정보를 초기화
-    for guild_id in attendance_data.keys():
-        attendance_data[guild_id]['attendance_opportunity'] = 1
+    # 사용자 응답과 캡챠 텍스트를 네이버 API로 검증
+    naver_captcha_key_response = requests.get(NAVER_CAPTCHA_API_URL + captcha_text,
+                                              headers={'X-Naver-Client-Id': NAVER_CAPTCHA_API_KEY,
+                                                       'X-Naver-Client-Secret': NAVER_CAPTCHA_SECRET_KEY})
+    naver_captcha_key_json = naver_captcha_key_response.json()
 
-    # 초기화된 출석 정보를 파일에 저장
-    with open(ATTENDANCE_FILE, 'w') as file:
-        json.dump(attendance_data, file)
+    naver_captcha_check_response = requests.get(NAVER_CAPTCHA_CHECK_URL + naver_captcha_key_json['key'],
+                                                headers={'X-Naver-Client-Id': NAVER_CAPTCHA_API_KEY,
+                                                         'X-Naver-Client-Secret': NAVER_CAPTCHA_SECRET_KEY})
 
-
-@bot.command(name='누적출석수', description="누적 출석 수 확인")
-async def attendance_info(interaction: discord.Interaction):
-    # 서버 ID
-    guild_id = str(interaction.guild.id)
-
-    # 출석 정보를 저장한 파일에서 서버별 출석 정보를 불러옴
-    try:
-        with open(ATTENDANCE_FILE, 'r') as file:
-            attendance_data = json.load(file)
-    except FileNotFoundError:
-        attendance_data = {}
-
-    # 서버가 등록되어 있지 않다면 메시지 출력
-    if guild_id not in attendance_data:
-        response = '해당 서버의 출석 정보가 없습니다.'
+    if naver_captcha_check_response.status_code == 200:
+        await interaction.author.send("인증이 완료되었습니다. 원하는 작업을 계속하세요(베타 태스트 중).")
     else:
-        attendance_count = attendance_data[guild_id]['attendance_count']
-        attendance_opportunity = attendance_data[guild_id]['attendance_opportunity']
-        response = f'누적 출석 횟수: {attendance_count}'
+        await interaction.author.send("인증에 실패했습니다. 다시 시도해주세요.")
 
-    await interaction.send(response)
-
-
-@bot.hybrid_command(name='출첵', description="출첵!")
-async def attend(interaction: discord.Interaction):
-    # 서버 ID
-    guild_id = str(interaction.guild.id)
-
-    # 출석 정보를 저장한 파일에서 서버별 출석 정보를 불러옴
-    try:
-        with open(ATTENDANCE_FILE, 'r') as file:
-            attendance_data = json.load(file)
-    except FileNotFoundError:
-        attendance_data = {}
-
-    # 서버가 등록되어 있지 않다면 추가
-    if guild_id not in attendance_data:
-        attendance_data[guild_id] = {'attendance_opportunity': 1, 'attendance_count': 0}
-
-    # 출석 기회가 남아있으면 출석 처리
-    if attendance_data[guild_id]['attendance_opportunity'] > 0:
-        attendance_data[guild_id]['attendance_count'] += 1
-        attendance_data[guild_id]['attendance_opportunity'] -= 1
-        response = f'{interaction.author.mention}, 출석이 완료되었습니다. 출석 횟수: {attendance_data[guild_id]["attendance_count"]}'
-    else:
-        response = f'{interaction.author.mention}, 이미 출석하셨습니다.'
-
-    # 출석 정보를 파일에 저장
-    with open(ATTENDANCE_FILE, 'w') as file:
-        json.dump(attendance_data, file)
-
-    await interaction.send(response)
 
 
 @bot.hybrid_command(name='hello', description="hi!")
@@ -150,9 +129,8 @@ async def clear(interaction: discord.Interaction, amount: int):
         await interaction.send("DM에서는 사용이 불가능한 명령어입니다!")
         return
 
-    channel = interaction.channel
-    await channel.purge(limit=amount)
-    await interaction.channel.send(f"{amount}개의 메시지를 삭제했어요!")
+    await interaction.purge(limit=amount)
+    await interaction.send(f"{amount}개의 메시지를 삭제했어요!")
     print(f"{amount}개의 메시지를 삭제했어요!")
 
 
@@ -173,6 +151,7 @@ async def send_server_announcement1(interaction: discord.Interaction, text: str,
     embed = discord.Embed(title=text, description=text1, color=0xAAFFFF)
     embed.add_field(name=text2, value=text3, inline=False)
     await interaction.send(embed=embed)
+
 
 @bot.hybrid_command(name='음성채널퇴장', description="음성 채널 퇴장")
 async def stop1(interaction: discord.Interaction):
@@ -223,10 +202,10 @@ async def roll(interaction: discord.Interaction):
 @bot.hybrid_command(name='프로필', description="프로필")
 async def embed(interaction: discord.Interaction):
     embed = discord.Embed(title="shii-bot", description="made by 보란이", color=0xAAFFFF)
-    embed.add_field(name="사용가능 명령어", value="/say, /embed, /hello, /bye, /copy, /clear, /roll, /mining, /game, /출첵, /누적 출석 수", inline=False)
+    embed.add_field(name="사용가능 명령어", value="/say, /embed, /hello, /bye, /copy, /clear, /roll, /mining, /game 등등등...", inline=False)
     embed.add_field(name="사용법", value="/를 사용하여 불러주세요!", inline=False)
     embed.add_field(name="호스팅", value="구글 클라우드 플렛폼(GCP)", inline=False)
-    embed.add_field(name="패치버전", value="v2.4.0", inline=False)
+    embed.add_field(name="패치버전", value="v2.5.0", inline=False)
     embed.set_footer(text="개인 정보 처리 방침: https://github.com/boranloves/shii-bot-discord/blob/main/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4%EC%B2%98%EB%A6%AC%EB%B0%A9%EC%B9%A8.txt")
     await interaction.send(embed=embed)
 
@@ -284,8 +263,8 @@ def get_answer(text):
         '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
         'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
         '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
-        '버전정보': '패치버전 v2.4.0',
-        '패치노트': '패치노트 v2.4.0 신규기능: 출석 기능 및 누석 출석 삭제 및 커멘드, 베타 커멘드 추가',
+        '버전정보': '패치버전 v2.5.0',
+        '패치노트': '패치노트 v2.5.0 신규기능: 캡챠인증 베타 커멘드 추가',
         '과자': '음...과자하니까 과자 먹고 싶당',
         '뭐해?': '음.....일하죠 일! 크흠',
         '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
@@ -315,7 +294,8 @@ def get_answer(text):
         'GCP': '드.디.어! shii-bot이 24시간 돌아간답니다!',
         '뭐야': '뭐지?',
         '잘가': '잘가요!',
-        '뭐들어?': '앗, 류현준님의 난간이욧!'
+        '뭐들어?': '앗, 류현준님의 난간이욧!',
+        '베타커멘드': '베타 커멘드는 현재 태스트 중인 커멘드 입니다! 언제 생기고 사라질지 모르죠'
     }
 
     if trim_text == '' or None:
