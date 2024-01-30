@@ -1,16 +1,14 @@
 import discord
 from discord.ext import commands, tasks
 from datetime import datetime
-import random
 import json
 import os
 import asyncio
 from youtube_search import YoutubeSearch
 import sympy
 import requests
-from PIL import Image, ImageDraw, ImageFont
-import io
-import string
+from koreanbots.integrations.discord import DiscordpyKoreanbots
+import random
 
 
 class Bot(commands.Bot):
@@ -30,61 +28,64 @@ class Bot(commands.Bot):
 attendance_file = 'attendance.json'
 intents = discord.Intents.all()
 bot = Bot(intents=intents)
-NAVER_CAPTCHA_API_KEY = '1'
-NAVER_CAPTCHA_SECRET_KEY = '1'
+kb = DiscordpyKoreanbots(bot, '', run_task=True)
 NAVER_CAPTCHA_API_URL = 'https://openapi.naver.com/v1/captcha/nkey?code='
 NAVER_CAPTCHA_CHECK_URL = 'https://openapi.naver.com/v1/captcha/ncaptcha.bin?key='
+naver_client_id = ''
+naver_client_secret = ''
 
 
-def generate_captcha():
-    width, height = 200, 100
-    image = Image.new('RGB', (width, height), color='white')
-    draw = ImageDraw.Draw(image)
+def papago_translate(text, source_lang, target_lang):
+    url = 'https://openapi.naver.com/v1/papago/n2mt'
+    headers = {
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Naver-Client-Id': naver_client_id,
+        'X-Naver-Client-Secret': naver_client_secret
+    }
+    data = {
+        'source': source_lang,
+        'target': target_lang,
+        'text': text
+    }
+    response = requests.post(url, headers=headers, data=data)
+    result = response.json()
+    translated_text = result['message']['result']['translatedText']
+    return translated_text
 
-    font = ImageFont.load_default()  # 기본 폰트 사용
-    captcha_text = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
-
-    draw.text((10, 30), captcha_text, font=font, fill='black')
-
-    image_bytes = io.BytesIO()
-    image.save(image_bytes, format='PNG')
-    return image_bytes.getvalue(), captcha_text
-
-
-# Command for captcha authentication and role assignment
-@bot.hybrid_command(name='캡챠인증', description="네이버 api 이미지 캡챠 인증(베타)")
-async def authenticate(interaction: discord.Interaction):
-    # Discord 사용자에게 DM으로 캡챠 이미지 전송
-    captcha_image, captcha_text = generate_captcha()
-    await interaction.send(f"DM으로 캡챠 이미지가 발송 되었습니다. 1분 내로 입력해 주시기 바랍니다.")
-    await interaction.author.send(f"이미지 캡챠를 풀어주세요. 1분 내로 이미지에 보이는 문자를 입력하세요.")
-    await interaction.author.send(file=discord.File(io.BytesIO(captcha_image), filename='captcha.png'))
-
-    # 사용자로부터 응답 대기
-    def check(message):
-        return message.author == interaction.author and message.channel.type == discord.ChannelType.private
-
-    try:
-        user_response = await bot.wait_for('message', timeout=60.0, check=check)
-    except TimeoutError:
-        await interaction.author.send("시간이 초과되었습니다. 인증이 취소되었습니다.")
-        return
-
-    # 사용자 응답과 캡챠 텍스트를 네이버 API로 검증
-    naver_captcha_key_response = requests.get(NAVER_CAPTCHA_API_URL + captcha_text,
-                                              headers={'X-Naver-Client-Id': NAVER_CAPTCHA_API_KEY,
-                                                       'X-Naver-Client-Secret': NAVER_CAPTCHA_SECRET_KEY})
-    naver_captcha_key_json = naver_captcha_key_response.json()
-
-    naver_captcha_check_response = requests.get(NAVER_CAPTCHA_CHECK_URL + naver_captcha_key_json['key'],
-                                                headers={'X-Naver-Client-Id': NAVER_CAPTCHA_API_KEY,
-                                                         'X-Naver-Client-Secret': NAVER_CAPTCHA_SECRET_KEY})
-
-    if naver_captcha_check_response.status_code == 200:
-        await interaction.author.send("인증이 완료되었습니다. 원하는 작업을 계속하세요(베타 태스트 중).")
+# 네이버 검색 함수
+def naver_search(query):
+    url = 'https://openapi.naver.com/v1/search/blog.json'
+    headers = {
+        'X-Naver-Client-Id': naver_client_id,
+        'X-Naver-Client-Secret': naver_client_secret
+    }
+    params = {
+        'query': query
+    }
+    response = requests.get(url, headers=headers, params=params)
+    result = response.json()
+    if 'items' in result:
+        return result['items'][0]['title'], result['items'][0]['link']
     else:
-        await interaction.author.send("인증에 실패했습니다. 다시 시도해주세요.")
+        return 'No results found', ''
 
+
+@bot.hybrid_command(name='번역', description="source_lang: 원본 언어 target_lang: 번역할 언어 네이버 open api를 통한 번역")
+async def translate(interaction: discord.Interaction, source_lang, target_lang, *, text: str):
+    translation = papago_translate(text, source_lang, target_lang)
+    embed = discord.Embed(title='번역 완료!', description="", color=0xFFB2F5)
+    embed.add_field(name=translation, value="", inline=False)
+    embed.set_footer(text=f"{source_lang}에서 {target_lang}로 번역")
+    await interaction.send(embed=embed)
+
+
+# 검색 명령어
+@bot.hybrid_command(name='네이버검색', description="네이버 open api를 통한 검색")
+async def search(interaction: discord.Interaction, *, query):
+    title, link = naver_search(query)
+    embed = discord.Embed(title=f"검색어: {query}", description=title, color=0x86E57F)
+    await interaction.send(embed=embed)
+    await interaction.send(link)
 
 
 @bot.hybrid_command(name='hello', description="hi!")
@@ -148,7 +149,7 @@ async def start1(interaction: discord.Interaction):
 
 @bot.hybrid_command(name='임베드생성', description="임베드생성기")
 async def send_server_announcement1(interaction: discord.Interaction, text: str, text1: str, text2: str, text3: str):
-    embed = discord.Embed(title=text, description=text1, color=0xAAFFFF)
+    embed = discord.Embed(title=text, description=text1, color=0xFFB2F5)
     embed.add_field(name=text2, value=text3, inline=False)
     await interaction.send(embed=embed)
 
@@ -201,11 +202,11 @@ async def roll(interaction: discord.Interaction):
 
 @bot.hybrid_command(name='프로필', description="프로필")
 async def embed(interaction: discord.Interaction):
-    embed = discord.Embed(title="shii-bot", description="made by 보란이", color=0xAAFFFF)
+    embed = discord.Embed(title="shii-bot", description="made by 보란이", color=0xFFB2F5)
     embed.add_field(name="사용가능 명령어", value="/say, /embed, /hello, /bye, /copy, /clear, /roll, /mining, /game 등등등...", inline=False)
     embed.add_field(name="사용법", value="/를 사용하여 불러주세요!", inline=False)
     embed.add_field(name="호스팅", value="구글 클라우드 플렛폼(GCP)", inline=False)
-    embed.add_field(name="패치버전", value="v2.5.0", inline=False)
+    embed.add_field(name="패치버전", value="v2.6.0", inline=False)
     embed.set_footer(text="개인 정보 처리 방침: https://github.com/boranloves/shii-bot-discord/blob/main/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4%EC%B2%98%EB%A6%AC%EB%B0%A9%EC%B9%A8.txt")
     await interaction.send(embed=embed)
 
@@ -226,8 +227,9 @@ async def member_stats(interaction: discord.Interaction):
     for role in guild.roles:
         if role.name != '@everyone':
             role_stats[role.name] = len(role.members)
-
-    await interaction.send(f'총 인원: {total_members}\n각 역할별 인원: {role_stats}')
+    embed = discord.Embed(title="인원통계", description=f"총 인원: {total_members}\n", color=0xFFB2F5)
+    embed.add_field(name=f"각 역할별 인원: {role_stats}", value="", inline=False)
+    await interaction.send(embed=embed)
 
 
 @bot.hybrid_command(name='say', description="shii-bot 전용 명령어")
@@ -263,8 +265,8 @@ def get_answer(text):
         '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
         'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
         '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
-        '버전정보': '패치버전 v2.5.0',
-        '패치노트': '패치노트 v2.5.0 신규기능: 캡챠인증 베타 커멘드 추가',
+        '버전정보': '패치버전 v2.6.0',
+        '패치노트': '패치노트 v2.6.0 신규기능: 캡챠인증 베타 커멘드 삭제및 베타커멘드 네이버 검색, 번역 추가',
         '과자': '음...과자하니까 과자 먹고 싶당',
         '뭐해?': '음.....일하죠 일! 크흠',
         '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
@@ -314,4 +316,4 @@ def get_answer(text):
     return text + "은(는) 없는 질문입니다."
 
 
-bot.run(토큰)
+bot.run('')
