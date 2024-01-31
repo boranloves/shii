@@ -9,7 +9,7 @@ import sympy
 import requests
 from koreanbots.integrations.discord import DiscordpyKoreanbots
 import random
-
+import re
 
 class Bot(commands.Bot):
     def __init__(self, intents: discord.Intents, **kwargs):
@@ -19,6 +19,7 @@ class Bot(commands.Bot):
         print(f"Logged in as {self.user}")
         await self.change_presence(status=discord.Status.online, activity=discord.Activity(type=discord.ActivityType.listening, name="류현준 난간"))
         await self.tree.sync()
+        kb = DiscordpyKoreanbots(self, '', run_task=True)
 
         if not os.path.exists(attendance_file):
             with open(attendance_file, 'w') as file:
@@ -28,12 +29,11 @@ class Bot(commands.Bot):
 attendance_file = 'attendance.json'
 intents = discord.Intents.all()
 bot = Bot(intents=intents)
-kb = DiscordpyKoreanbots(bot, '', run_task=True)
 NAVER_CAPTCHA_API_URL = 'https://openapi.naver.com/v1/captcha/nkey?code='
 NAVER_CAPTCHA_CHECK_URL = 'https://openapi.naver.com/v1/captcha/ncaptcha.bin?key='
 naver_client_id = ''
 naver_client_secret = ''
-
+KAKAO_API_KEY = ''
 
 def papago_translate(text, source_lang, target_lang):
     url = 'https://openapi.naver.com/v1/papago/n2mt'
@@ -69,23 +69,62 @@ def naver_search(query):
     else:
         return 'No results found', ''
 
+def remove_html_tags(text):
+    clean = re.compile('<.*?>')
+    return re.sub(clean, '', text)
 
-@bot.hybrid_command(name='번역', description="source_lang: 원본 언어 target_lang: 번역할 언어 네이버 open api를 통한 번역")
+
+@bot.hybrid_command(name='번역', description="source_lang: 원본 언어 target_lang: 번역할 언어 네이버 open api를 통한 번역(베타)")
 async def translate(interaction: discord.Interaction, source_lang, target_lang, *, text: str):
     translation = papago_translate(text, source_lang, target_lang)
     embed = discord.Embed(title='번역 완료!', description="", color=0xFFB2F5)
-    embed.add_field(name=translation, value="", inline=False)
-    embed.set_footer(text=f"{source_lang}에서 {target_lang}로 번역")
+    embed.add_field(name=translation, value=f"{source_lang}에서 {target_lang}로 번역", inline=False)
     await interaction.send(embed=embed)
 
 
-# 검색 명령어
-@bot.hybrid_command(name='네이버검색', description="네이버 open api를 통한 검색")
+@bot.hybrid_command(name='카카오검색', description="카카오를 통한 검색(베타)")
+async def search_kakao(interaction: discord.Interaction, *, text: str):
+    # 사용자 입력을 문자열로 결합
+    query = ' '.join(text)
+
+    # 카카오 검색 API 호출
+    url = f'https://dapi.kakao.com/v2/search/web?query={query}'
+    headers = {'Authorization': f'KakaoAK {KAKAO_API_KEY}'}
+    response = requests.get(url, headers=headers)
+
+    try:
+        # 응답이 JSON 형식으로 파싱 가능한지 확인
+        response.raise_for_status()
+        data = response.json()
+
+        # 첫 번째 검색 결과를 가져오기
+        result = data['documents'][0]
+
+        # 결과를 디스코드 채팅으로 전송
+        embed = discord.Embed(title=f"**카카오 검색 결과**", color=0xFFE400)
+        html_text = f'{result["title"]}'
+        plain_text = remove_html_tags(html_text)
+        embed.add_field(name=plain_text, value=f'URL: {result["url"]}', inline=False)
+        await interaction.send(embed=embed)
+
+    except requests.exceptions.HTTPError as e:
+        await interaction.send(f'HTTP 오류: {e.response.status_code} - {e.response.text}')
+
+    except (IndexError, KeyError):
+        await interaction.send(f'검색 결과를 찾을 수 없습니다. 더 정확한 검색어를 입력하세요.')
+
+    except requests.exceptions.RequestException as e:
+        await interaction.send(f'오류 발생: {e}')
+
+
+@bot.hybrid_command(name='네이버검색', description="네이버 open api를 통한 검색(베타)")
 async def search(interaction: discord.Interaction, *, query):
     title, link = naver_search(query)
-    embed = discord.Embed(title=f"검색어: {query}", description=title, color=0x86E57F)
+    html_text = title
+    plain_text = remove_html_tags(html_text)
+    embed = discord.Embed(title=f"검색어: {query}", description=plain_text, color=0x86E57F)
+    embed.set_footer(text=link)
     await interaction.send(embed=embed)
-    await interaction.send(link)
 
 
 @bot.hybrid_command(name='hello', description="hi!")
@@ -126,16 +165,20 @@ async def calculate_expression(ctx, *, expression):
 
 @bot.hybrid_command(name='clear', description="메세지 청소")
 async def clear(interaction: discord.Interaction, amount: int):
+    await interaction.send("잠시 기다려 주세요")
     if not interaction.guild:
         await interaction.send("DM에서는 사용이 불가능한 명령어입니다!")
         return
 
-    await interaction.purge(limit=amount)
-    await interaction.send(f"{amount}개의 메시지를 삭제했어요!")
+    channel = interaction.channel
+    await channel.purge(limit=amount + 1)
+    sent_message = await channel.send(f"{amount}개의 메시지를 삭제했어요!")
     print(f"{amount}개의 메시지를 삭제했어요!")
+    await asyncio.sleep(3)
+    await sent_message.delete()
 
 
-@bot.hybrid_command(name='음성채널입장', description="음성 채널 입장")
+@bot.hybrid_command(name='음성채널입장', description="음성 채널 입장(베타)")
 async def start1(interaction: discord.Interaction):
     if interaction.author.voice and interaction.author.voice.channel:
         channel = interaction.author.voice.channel
@@ -154,7 +197,7 @@ async def send_server_announcement1(interaction: discord.Interaction, text: str,
     await interaction.send(embed=embed)
 
 
-@bot.hybrid_command(name='음성채널퇴장', description="음성 채널 퇴장")
+@bot.hybrid_command(name='음성채널퇴장', description="음성 채널 퇴장(베타)")
 async def stop1(interaction: discord.Interaction):
     try:
         # 음성 채널에서 봇을 내보냅니다.
@@ -202,11 +245,11 @@ async def roll(interaction: discord.Interaction):
 
 @bot.hybrid_command(name='프로필', description="프로필")
 async def embed(interaction: discord.Interaction):
-    embed = discord.Embed(title="shii-bot", description="made by 보란이", color=0xFFB2F5)
+    embed = discord.Embed(title=f"shii-bot <:__:1201865120368824360>", description="made by 보란이", color=0xFFB2F5)
     embed.add_field(name="사용가능 명령어", value="/say, /embed, /hello, /bye, /copy, /clear, /roll, /mining, /game 등등등...", inline=False)
     embed.add_field(name="사용법", value="/를 사용하여 불러주세요!", inline=False)
     embed.add_field(name="호스팅", value="구글 클라우드 플렛폼(GCP)", inline=False)
-    embed.add_field(name="패치버전", value="v2.6.0", inline=False)
+    embed.add_field(name="패치버전", value="v2.7.1", inline=False)
     embed.set_footer(text="개인 정보 처리 방침: https://github.com/boranloves/shii-bot-discord/blob/main/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4%EC%B2%98%EB%A6%AC%EB%B0%A9%EC%B9%A8.txt")
     await interaction.send(embed=embed)
 
@@ -229,6 +272,36 @@ async def member_stats(interaction: discord.Interaction):
             role_stats[role.name] = len(role.members)
     embed = discord.Embed(title="인원통계", description=f"총 인원: {total_members}\n", color=0xFFB2F5)
     embed.add_field(name=f"각 역할별 인원: {role_stats}", value="", inline=False)
+    await interaction.send(embed=embed)
+
+
+@bot.hybrid_command(name='help_shii', description="시이봇 메뉴얼")
+async def help(interaction: discord.Interaction):
+    embed = discord.Embed(title="시이봇 명령어", color=0xFFB2F5)
+    embed.add_field(name="/번역", value="파파고 번역기능 입니다. 앞에는 시작언어, 뒤에는 도착언어를 입력하고, 마지막에 단어를 적어주세요", inline=False)
+    embed.add_field(name="/패치노트", value="시이봇의 패치노트를 볼 수 있는 명령어 입니다.", inline=False)
+    embed.add_field(name="/네이버검색, /카카오검색, /유튜브검색", value="검색기능입니다. 명령어뒤 검색할 키워드를 입력해주세요.", inline=False)
+    embed.add_field(name="/계산", value="간단한 계산기 입니다. 명령어뒤 수식을 입력해주세요.", inline=False)
+    embed.add_field(name="/음성채널입장, /음성채널퇴장", value="음성채널 입장 및 퇴장 기능입니다. 음성채널 전용기능은 개발할 예정입니다.", inline=False)
+    embed.add_field(name="/인원통계", value="서버 인원통계 기능 입니다. 현재 개발중에 있습니다.", inline=False)
+    embed.add_field(name="/임베드생성", value="임베드를 생성하는 기능 입니다. 총 2줄로 1,2번째는 타이틀과 설명, 3,4번째는 2번째줄 이름과 설명입니다.", inline=False)
+    embed.add_field(name="/타이머", value="간단한 타이머 기능 입니다. 명령어뒤에 초를 입력하고, 선택적으로 메세지를 입력할 수 있습니다.", inline=False)
+    embed.add_field(name="/프로필", value="시이봇의 프로필을 볼 수 있는 명령어 입니다.", inline=False)
+    embed.add_field(name="/hello, /bye", value="간단한 인사 입니다.", inline=False)
+    embed.add_field(name="/clear", value="메세지를 지우는 기능 입니다. 명령어뒤에 지울 메세지의 수를 입력할 수 있습니다.", inline=False)
+    embed.add_field(name="/copy", value="메세지를 따라 쓰는 기능입니다. 명령어뒤에 따라쓸 메세지의 내용을 입력할 수 있습니다.", inline=False)
+    embed.add_field(name="/game", value="가위바위보 미니게임 입니다. 명령어뒤에 가위, 바위, 보 중 하나를 골라 쓸 수 있습니다.", inline=False)
+    embed.add_field(name="/mining", value="광질 미니게임 입니다. 3개의 광물이 무작위로 나옵니다.", inline=False)
+    embed.add_field(name="/roll", value="주사위 미니게임 입니다. 간단한 주사위 굴리기를 할 수 있습니다.", inline=False)
+    embed.add_field(name="/say", value="시이봇 전용 명령어 입니다. 명령어뒤 단어를 입력해 시이봇에게 답변을 받을 수 있습니다.", inline=False)
+    embed.set_footer(text="버전: v2.7.1")
+    await interaction.send(embed=embed)
+
+
+@bot.hybrid_command(name="패치노트", description="시이봇 패치노트 보기")
+async def pt(interaction: discord.Interaction):
+    embed = discord.Embed(title="v2.7.1 패치노트 명령어", color=0xFFB2F5)
+    embed.add_field(name="신규기능", value=": 카카오검색, help, 패치노트 커멘드 추가 및 버그 수정", inline=False)
     await interaction.send(embed=embed)
 
 
@@ -257,7 +330,8 @@ def get_answer(text):
     trim_text = text.replace(" ", "")
 
     answer_dict = {
-        '안녕': '안녕하세요. shii입니다!',
+        'hello': '안녕하세욧!',
+        '안녕': '안녕하세요. 시이입니다!',
         '누구야': '안녕하세요. shii입니다!',
         '요일': ':calendar: 오늘은 {}입니다'.format(get_day_of_week()),
         '시간': ':clock9: 현재 시간은 {}입니다.'.format(get_time()),
@@ -265,23 +339,20 @@ def get_answer(text):
         '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
         'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
         '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
-        '버전정보': '패치버전 v2.6.0',
-        '패치노트': '패치노트 v2.6.0 신규기능: 캡챠인증 베타 커멘드 삭제및 베타커멘드 네이버 검색, 번역 추가',
+        '버전정보': '패치버전 v2.7.1',
+        '패치노트': '패치노트 v2.7.1 신규기능: 카카오검색, help 커멘드 추가 및 버그 수정',
         '과자': '음...과자하니까 과자 먹고 싶당',
         '뭐해?': '음.....일하죠 일! 크흠',
         '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
         '이벤트': '흐음..이벤트는 아직 없어요ㅠㅠ',
         '웃어': '히힛 (　＾▽＾)',
         '맴매': '흐에에엥ㅠㅠㅜ방장님! 도와주세여(/´△`＼)',
-        '아재게그': '(방장님은 이걸 왜 시킨거야)왕이 넘어지면? 킹콩!',
         '옥에티': '옥에티가 있을것같아요? 네, 아마 있을거예요 방장님이 아직 초짜라',
         '잔소리해줘': '잔소리는 나쁜거예요 알겠어요?',
-        '유튜브': '현재 유튜브 연동 기능은 검토중 입니다!',
+        '유튜브': '유튜브 검색 기능은 /유튜브검색 으로 실행이 가능합니다!',
         '크레딧': '전부다 보란이(그렇게 써있음 ㅇㅇ)',
-        'GPT': '시험 태스트 결과 현재로썬 적용이 불가 합니다 ㅠㅠ',
         '구멍': '구멍',
-        '자가복제': '!자가복제!',
-        '방장님': '방장님이요? 좀, 쪼잔하긴해요(소곤소곤)',
+        '개발자님': '개발자님이요? 좀, 쪼잔하긴해요(소곤소곤)',
         '종': '댕댕대에에엥',
         '할말없어?': '할말이요? 할말이요? 할말이요? 할말이요? 할말이요? 할말이요? 없어욧!',
         '1+1은?': 'ㅏ? ERROR 시스탬을 정지합니다아(삐삐삐삐삐)',
@@ -291,13 +362,14 @@ def get_answer(text):
         '아이싯떼루': '웩',
         '애니': '~개발자왈~ 백성녀와 흑목사는 꼭 봐라',
         '축구경기': '축구 경기 연동 기능은 현재 개발중 입니다. 빠른 시일내에 완성 하겠습니다!',
-        'help': '저와 대화 하실려면 /s 뒤에 질문을 넣어 불러주세요!',
+        'help': '저와 대화 하실려면 /say 뒤에 질문을 넣어 불러주세요!',
         '음악': '우리 개발자님은 류현준님의 노래를 좋아한데요. 네, TMI네용',
-        'GCP': '드.디.어! shii-bot이 24시간 돌아간답니다!',
+        'GCP': '지금 시이봇은 GCP에서 실행되고 있습니다!',
         '뭐야': '뭐지?',
         '잘가': '잘가요!',
         '뭐들어?': '앗, 류현준님의 난간이욧!',
-        '베타커멘드': '베타 커멘드는 현재 태스트 중인 커멘드 입니다! 언제 생기고 사라질지 모르죠'
+        '베타커멘드': '베타 커멘드는 현재 태스트 중인 커멘드 입니다! 언제 생기고 사라질지 모르죠',
+        '시이이모지': "<:__:1201865120368824360>"
     }
 
     if trim_text == '' or None:
@@ -316,4 +388,4 @@ def get_answer(text):
     return text + "은(는) 없는 질문입니다."
 
 
-bot.run('')
+bot.run()
