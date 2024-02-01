@@ -11,21 +11,24 @@ from koreanbots.integrations.discord import DiscordpyKoreanbots
 import random
 import re
 
+
 class Bot(commands.Bot):
     def __init__(self, intents: discord.Intents, **kwargs):
         super().__init__(command_prefix="/", intents=intents, case_insensitive=True)
 
     async def on_ready(self):
         print(f"Logged in as {self.user}")
-        await self.change_presence(status=discord.Status.online, activity=discord.Activity(type=discord.ActivityType.listening, name="류현준 난간"))
+        await self.change_presence(status=discord.Status.online,
+                                   activity=discord.Activity(type=discord.ActivityType.listening, name="류현준 난간"))
         await self.tree.sync()
-        kb = DiscordpyKoreanbots(self, '', run_task=True)
+        kb = DiscordpyKoreanbots(self,run_task=True)
 
         if not os.path.exists(attendance_file):
             with open(attendance_file, 'w') as file:
                 json.dump({}, file)
 
 
+json_file_path = 'bot_info.json'
 attendance_file = 'attendance.json'
 intents = discord.Intents.all()
 bot = Bot(intents=intents)
@@ -34,6 +37,23 @@ NAVER_CAPTCHA_CHECK_URL = 'https://openapi.naver.com/v1/captcha/ncaptcha.bin?key
 naver_client_id = ''
 naver_client_secret = ''
 KAKAO_API_KEY = ''
+server_data_path = 'server_data.json'
+
+
+def load_bot_info():
+    try:
+        with open(json_file_path, 'r') as file:
+            bot_info = json.load(file)
+    except FileNotFoundError:
+        bot_info = {}
+
+    return bot_info
+
+
+def save_bot_info(bot_info):
+    with open(json_file_path, 'w') as file:
+        json.dump(bot_info, file, indent=2, ensure_ascii=False)
+
 
 def papago_translate(text, source_lang, target_lang):
     url = 'https://openapi.naver.com/v1/papago/n2mt'
@@ -52,6 +72,7 @@ def papago_translate(text, source_lang, target_lang):
     translated_text = result['message']['result']['translatedText']
     return translated_text
 
+
 # 네이버 검색 함수
 def naver_search(query):
     url = 'https://openapi.naver.com/v1/search/blog.json'
@@ -68,6 +89,25 @@ def naver_search(query):
         return result['items'][0]['title'], result['items'][0]['link']
     else:
         return 'No results found', ''
+
+
+def load_server_data():
+    try:
+        with open(server_data_path, 'r') as file:
+            server_data = json.load(file)
+    except FileNotFoundError:
+        server_data = {}
+
+    return server_data
+
+
+# JSON 파일에 정보를 저장하는 함수 (서버별 데이터 저장용)
+def save_server_data(server_id, data):
+    server_data = load_server_data()
+    server_data[server_id] = data
+
+    with open(server_data_path, 'w') as file:
+        json.dump(server_data, file, indent=2, ensure_ascii=False)
 
 def remove_html_tags(text):
     clean = re.compile('<.*?>')
@@ -165,9 +205,12 @@ async def calculate_expression(ctx, *, expression):
 
 @bot.hybrid_command(name='clear', description="메세지 청소")
 async def clear(interaction: discord.Interaction, amount: int):
-    await interaction.send("잠시 기다려 주세요")
+    sent_message1 = await interaction.send("잠시 기다려 주세요")
     if not interaction.guild:
-        await interaction.send("DM에서는 사용이 불가능한 명령어입니다!")
+        sent_message2 = await interaction.send("DM에서는 사용이 불가능한 명령어입니다!")
+        await asyncio.sleep(3)
+        await sent_message1.delete()
+        await sent_message2.delete()
         return
 
     channel = interaction.channel
@@ -229,11 +272,34 @@ async def game(interaction: discord.Interaction, user: str):  # user:str로 !gam
 
 @bot.hybrid_command(name='mining', description="광질을 하자")
 async def mining(interaction: discord.Interaction):
+    server_id = str(interaction.guild.id)
+    server_data = load_server_data()
+
     minerals = ['다이아몬드', '루비', '에메랄드', '자수정', '철', '석탄']
     weights = [1, 3, 6, 15, 25, 50]
-    results = random.choices(minerals, weights=weights, k=3)  # 광물 3개를 가중치에 따라 뽑음
+    results = random.choices(minerals, weights=weights, k=3)
+    # 개인 데이터 추가 또는 업데이트
+    user_id = str(interaction.author.id)
+    user_data = server_data.get(server_id, {}).get(user_id, [])
+    user_data.extend(results)
+    server_data.setdefault(server_id, {})[user_id] = user_data
+    save_server_data(server_id, server_data)
     await interaction.send(', '.join(results) + ' 광물들을 획득하였습니다.')
     print(', '.join(results) + ' 광물들을 획득하였습니다.')
+
+
+# 'myminerals' 슬래시 명령어 구현
+@bot.hybrid_command(name='myminerals', description="내가 획득한 광물 확인")
+async def myminerals(interaction: discord.Interaction):
+    server_id = str(interaction.guild.id)
+    user_id = str(interaction.author.id)
+    server_data = load_server_data()
+
+    user_data = server_data.get(server_id, {}).get(user_id, [])
+    if user_data:
+        await interaction.send(f"{interaction.author.display_name}님의 획득한 광물: {', '.join(user_data)}")
+    else:
+        await interaction.send("아직 광물을 획득하지 않았습니다.")
 
 
 @bot.hybrid_command(name='roll', description="주사위 굴리기")
@@ -246,11 +312,13 @@ async def roll(interaction: discord.Interaction):
 @bot.hybrid_command(name='프로필', description="프로필")
 async def embed(interaction: discord.Interaction):
     embed = discord.Embed(title=f"shii-bot <:__:1201865120368824360>", description="made by 보란이", color=0xFFB2F5)
-    embed.add_field(name="사용가능 명령어", value="/say, /embed, /hello, /bye, /copy, /clear, /roll, /mining, /game 등등등...", inline=False)
+    embed.add_field(name="사용가능 명령어", value="/say, /embed, /hello, /bye, /copy, /clear, /roll, /mining, /game 등등등...",
+                    inline=False)
     embed.add_field(name="사용법", value="/를 사용하여 불러주세요!", inline=False)
     embed.add_field(name="호스팅", value="구글 클라우드 플렛폼(GCP)", inline=False)
-    embed.add_field(name="패치버전", value="v2.7.1", inline=False)
-    embed.set_footer(text="개인 정보 처리 방침: https://github.com/boranloves/shii-bot-discord/blob/main/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4%EC%B2%98%EB%A6%AC%EB%B0%A9%EC%B9%A8.txt")
+    embed.add_field(name="패치버전", value="v2.8.2", inline=False)
+    embed.set_footer(
+        text="개인 정보 처리 방침: https://github.com/boranloves/shii-bot-discord/blob/main/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4%EC%B2%98%EB%A6%AC%EB%B0%A9%EC%B9%A8.txt")
     await interaction.send(embed=embed)
 
 
@@ -278,6 +346,8 @@ async def member_stats(interaction: discord.Interaction):
 @bot.hybrid_command(name='help_shii', description="시이봇 메뉴얼")
 async def help(interaction: discord.Interaction):
     embed = discord.Embed(title="시이봇 명령어", color=0xFFB2F5)
+    embed.add_field(name="/알려주기", value="시이봇 전용 명령어 입니다. 명령어뒤에 키워드와 설명을 입력하여 시이봇을 학습시킬 수 있습니다.", inline=False)
+    embed.add_field(name="시이야", value="시이봇 전용 명령어 입니다. 알려주기로 학습한 키워드와 설명을 말합니다.", inline=False)
     embed.add_field(name="/번역", value="파파고 번역기능 입니다. 앞에는 시작언어, 뒤에는 도착언어를 입력하고, 마지막에 단어를 적어주세요", inline=False)
     embed.add_field(name="/패치노트", value="시이봇의 패치노트를 볼 수 있는 명령어 입니다.", inline=False)
     embed.add_field(name="/네이버검색, /카카오검색, /유튜브검색", value="검색기능입니다. 명령어뒤 검색할 키워드를 입력해주세요.", inline=False)
@@ -293,25 +363,59 @@ async def help(interaction: discord.Interaction):
     embed.add_field(name="/game", value="가위바위보 미니게임 입니다. 명령어뒤에 가위, 바위, 보 중 하나를 골라 쓸 수 있습니다.", inline=False)
     embed.add_field(name="/mining", value="광질 미니게임 입니다. 3개의 광물이 무작위로 나옵니다.", inline=False)
     embed.add_field(name="/roll", value="주사위 미니게임 입니다. 간단한 주사위 굴리기를 할 수 있습니다.", inline=False)
-    embed.add_field(name="/say", value="시이봇 전용 명령어 입니다. 명령어뒤 단어를 입력해 시이봇에게 답변을 받을 수 있습니다.", inline=False)
-    embed.set_footer(text="버전: v2.7.1")
+    embed.add_field(name="/say", value="개발이 중지된 구 시이봇 전용 명령어 입니다. 명령어뒤 단어를 입력해 시이봇에게 답변을 받을 수 있습니다.", inline=False)
+    embed.set_footer(text="버전: v2.8.2")
     await interaction.send(embed=embed)
 
 
 @bot.hybrid_command(name="패치노트", description="시이봇 패치노트 보기")
 async def pt(interaction: discord.Interaction):
-    embed = discord.Embed(title="v2.7.1 패치노트 명령어", color=0xFFB2F5)
-    embed.add_field(name="신규기능", value=": 카카오검색, help, 패치노트 커멘드 추가 및 버그 수정", inline=False)
+    embed = discord.Embed(title="v2.8.2 패치노트", color=0xFFB2F5)
+    embed.add_field(name="신규기능", value="베타 커멘드 시이야, 알려주기 추가 및 say 커멘드 개발 종료, 기타 버그 수정", inline=False)
+    embed.add_field(name="버그 수정", value="DM에서 /clear 사용시 '잠시만 기다려주세요','DM에서는 사용할 수 없는 명령어 입니다!' 문구가 3초뒤 안 지워지는 버그 수정", inline=False)
     await interaction.send(embed=embed)
 
 
-@bot.hybrid_command(name='say', description="shii-bot 전용 명령어")
+@bot.hybrid_command(name='알려주기', description='시이봇에게 많은걸 알려주세요!(베타)')
+async def tell(interaction: discord.Interaction, keyword: str, *, description: str):
+    bot_info = load_bot_info()
+
+    # 이미 존재하는 키워드인지 확인 후 저장
+    if keyword not in bot_info:
+        bot_info[keyword] = {
+            'description': description,
+            'author_nickname': interaction.author.display_name
+        }
+        await interaction.send(f"{keyword}에 대한 설명이 저장되었습니다.")
+    else:
+        await interaction.send(f"{keyword}는 이미 존재하는 키워드입니다. 저장되지 않았습니다.")
+    # 정보 저장
+    save_bot_info(bot_info)
+
+
+@bot.hybrid_command(name='시이야', description='shii-bot 전용 명령어(베타)')
+async def say1(interaction: discord.Interaction, keyword: str):
+    bot_info = load_bot_info()
+    info = bot_info.get(keyword)
+
+    if info:
+        author_nickname = info['author_nickname']
+        description = info['description']
+        response = f"{description}\n```{keyword}의 답변이예욧! {author_nickname}이(가) 알려줬어요!```"
+    else:
+        response = "그 키워드에 대한 설명을 찾을 수 없어요."
+
+    await interaction.send(response)
+
+
+@bot.hybrid_command(name='say', description="shii-bot 전용 명령어(구)")
 async def say(interaction: discord.Interaction, text: str):
     print(interaction, text)
     question = text
     answer = get_answer(question)
     await interaction.send(answer)
     print(answer)
+
 
 def get_day_of_week():
     weekday_list = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
@@ -340,7 +444,6 @@ def get_answer(text):
         'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
         '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
         '버전정보': '패치버전 v2.7.1',
-        '패치노트': '패치노트 v2.7.1 신규기능: 카카오검색, help 커멘드 추가 및 버그 수정',
         '과자': '음...과자하니까 과자 먹고 싶당',
         '뭐해?': '음.....일하죠 일! 크흠',
         '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
