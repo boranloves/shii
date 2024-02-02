@@ -1,6 +1,6 @@
 ## shii-bot 오픈소스 입니다.
 
-/say: 저장된 단어를 출력                            
+/--say--: 저장된 단어를 출력                            
 /copy: 메세지 복제                            
 /game, mining, roll: 미니게임                            
 /clear: 메세지 청소                            
