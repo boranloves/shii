@@ -21,10 +21,10 @@ class Bot(commands.Bot):
         await self.change_presence(status=discord.Status.online,
                                    activity=discord.Activity(type=discord.ActivityType.listening, name="류현준 난간"))
         await self.tree.sync()
-        kb = DiscordpyKoreanbots(self,run_task=True)
-
-        if not os.path.exists(attendance_file):
-            with open(attendance_file, 'w') as file:
+        kb = DiscordpyKoreanbots(self,
+                                 run_task=True)
+        if not os.path.exists(json_file_path):
+            with open(json_file_path, 'w') as file:
                 json.dump({}, file)
 
 
@@ -34,24 +34,54 @@ intents = discord.Intents.all()
 bot = Bot(intents=intents)
 NAVER_CAPTCHA_API_URL = 'https://openapi.naver.com/v1/captcha/nkey?code='
 NAVER_CAPTCHA_CHECK_URL = 'https://openapi.naver.com/v1/captcha/ncaptcha.bin?key='
-naver_client_id = ''
-naver_client_secret = ''
-KAKAO_API_KEY = ''
+naver_client_id = 
+naver_client_secret = 
+KAKAO_API_KEY = 
 server_data_path = 'server_data.json'
+happiness_file_path = 'happiness.json'
 
+
+class Happiness:
+    def __init__(self):
+        self.users = {}
+
+    def get_user_happiness(self, server_id, user_id):
+        return self.users.get(server_id, {}).get(user_id, 0)
+
+    def set_user_happiness(self, server_id, user_id, happiness):
+        if server_id not in self.users:
+            self.users[server_id] = {}
+        self.users[server_id][user_id] = happiness
+
+    def increment_user_happiness(self, server_id, user_id, amount=1):
+        current_happiness = self.get_user_happiness(server_id, user_id)
+        new_happiness = current_happiness + amount
+        self.set_user_happiness(server_id, user_id, new_happiness)
+
+    def save_to_file(self):
+        with open(happiness_file_path, 'w') as file:
+            json.dump(self.users, file, indent=2)
+
+    def load_from_file(self):
+        if os.path.exists(happiness_file_path):
+            with open(happiness_file_path, 'r') as file:
+                self.users = json.load(file)
 
 def load_bot_info():
+    file_path = json_file_path
+
     try:
-        with open(json_file_path, 'r') as file:
+        with open(file_path, 'r', encoding='utf-8') as file:
             bot_info = json.load(file)
+            print(bot_info)
     except FileNotFoundError:
-        bot_info = {}
+            bot_info = {}
 
     return bot_info
 
 
 def save_bot_info(bot_info):
-    with open(json_file_path, 'w') as file:
+    with open(json_file_path, 'w', encoding='utf-8') as file:
         json.dump(bot_info, file, indent=2, ensure_ascii=False)
 
 
@@ -270,6 +300,14 @@ async def game(interaction: discord.Interaction, user: str):  # user:str로 !gam
         print(f'{user} vs {bot}  내가 이겼당~.')
 
 
+@bot.hybrid_command(name='공지사항', description="시이봇의 공지를 볼 수 있어요!")
+async def announcement(interaction: discord.Interaction):
+    embed = discord.Embed(title="시이봇 공지 사항", description="2024.02.04일 공지", color=0xFFB2F5)
+    embed.add_field(name="/시이야, /알려주기 커멘드 관련 안내", value="현재, /알려주기 로 받은 단어들을 .json 파일에 저장하는 방식으로 코딩 되어있습니다. 간혹, 코드 업그레이드시 .json파일을 읽지 못하는 버그가 있어, 간혈적으로 /알려주기 커멘드로 저장한 단어들이 초기회 될 수 있습니다. 이점, 양해 부탁드립니다.", inline=False)
+    embed.add_field(name="호감도 시스템에 대하여..", value="호감도 시스템은, /시이야, /알려주기 커멘드에서 호감도를 올릴 수 있으며, 추후 호감도 레벨로 할 수 있는것들을 추가할 예정입니다.", inline=False)
+    await interaction.send(embed=embed)
+
+
 @bot.hybrid_command(name='mining', description="광질을 하자")
 async def mining(interaction: discord.Interaction):
     server_id = str(interaction.guild.id)
@@ -347,7 +385,8 @@ async def member_stats(interaction: discord.Interaction):
 async def help(interaction: discord.Interaction):
     embed = discord.Embed(title="시이봇 명령어", color=0xFFB2F5)
     embed.add_field(name="/알려주기", value="시이봇 전용 명령어 입니다. 명령어뒤에 키워드와 설명을 입력하여 시이봇을 학습시킬 수 있습니다.", inline=False)
-    embed.add_field(name="시이야", value="시이봇 전용 명령어 입니다. 알려주기로 학습한 키워드와 설명을 말합니다.", inline=False)
+    embed.add_field(name="/시이야", value="시이봇 전용 on_message 입니다. 알려주기로 학습한 키워드와 설명을 말합니다. /없이 실행 합니다.", inline=False)
+    embed.add_field(name="/호감도확인, 호감도도움말", value="각각 호감도 확인, 호감도 도움말 입니다.", inline=False)
     embed.add_field(name="/번역", value="파파고 번역기능 입니다. 앞에는 시작언어, 뒤에는 도착언어를 입력하고, 마지막에 단어를 적어주세요", inline=False)
     embed.add_field(name="/패치노트", value="시이봇의 패치노트를 볼 수 있는 명령어 입니다.", inline=False)
     embed.add_field(name="/네이버검색, /카카오검색, /유튜브검색", value="검색기능입니다. 명령어뒤 검색할 키워드를 입력해주세요.", inline=False)
@@ -363,22 +402,31 @@ async def help(interaction: discord.Interaction):
     embed.add_field(name="/game", value="가위바위보 미니게임 입니다. 명령어뒤에 가위, 바위, 보 중 하나를 골라 쓸 수 있습니다.", inline=False)
     embed.add_field(name="/mining", value="광질 미니게임 입니다. 3개의 광물이 무작위로 나옵니다.", inline=False)
     embed.add_field(name="/roll", value="주사위 미니게임 입니다. 간단한 주사위 굴리기를 할 수 있습니다.", inline=False)
-    embed.add_field(name="/say", value="개발이 중지된 구 시이봇 전용 명령어 입니다. 명령어뒤 단어를 입력해 시이봇에게 답변을 받을 수 있습니다.", inline=False)
-    embed.set_footer(text="버전: v2.8.2")
+    embed.set_footer(text="버전: v2.9.3")
     await interaction.send(embed=embed)
 
+@bot.hybrid_command(name='호감도도움말', description="호감도 시스템 메뉴얼")
+async def hhlep(interaction: discord.Interaction):
+    embed = discord.Embed(title="시이봇 호감도 시스템 도움말", color=0xFFB2F5)
+    embed.add_field(name="호감도 시스템 이란?", value="호감도 시스템은 시이봇과 더 잘 지내라는 바람으로 만들었습니다!, 시이봇과 놀면서 호감도를 키워 보세요!", inline=False)
+    embed.add_field(name="호감도 상승법", value="/시이야, /알려주기 커멘드에서 각각 한번 실행 시킬떄 마다 1,2 씩 상승합니다.", inline=False)
+    await interaction.send(embed=embed)
 
 @bot.hybrid_command(name="패치노트", description="시이봇 패치노트 보기")
 async def pt(interaction: discord.Interaction):
-    embed = discord.Embed(title="v2.8.2 패치노트", color=0xFFB2F5)
-    embed.add_field(name="신규기능", value="베타 커멘드 시이야, 알려주기 추가 및 say 커멘드 개발 종료, 기타 버그 수정", inline=False)
-    embed.add_field(name="버그 수정", value="DM에서 /clear 사용시 '잠시만 기다려주세요','DM에서는 사용할 수 없는 명령어 입니다!' 문구가 3초뒤 안 지워지는 버그 수정", inline=False)
+    embed = discord.Embed(title="v2.9.3 패치노트", color=0xFFB2F5)
+    embed.add_field(name="신규기능", value="/say 커멘드 재거 및 /공지사항, 호감도 시스템, /시이야 커멘드 고정 단어 추가", inline=False)
+    embed.add_field(name="버그 수정", value="/시이야 커멘드에서 단어를 읽지 못하는 버그 수정", inline=False)
     await interaction.send(embed=embed)
 
 
 @bot.hybrid_command(name='알려주기', description='시이봇에게 많은걸 알려주세요!(베타)')
 async def tell(interaction: discord.Interaction, keyword: str, *, description: str):
     bot_info = load_bot_info()
+    server_id = str(interaction.guild.id)
+    user_id = str(interaction.author.id)
+    happiness_manager.increment_user_happiness(server_id, user_id, amount=2)
+    happiness_manager.save_to_file()
 
     # 이미 존재하는 키워드인지 확인 후 저장
     if keyword not in bot_info:
@@ -386,54 +434,37 @@ async def tell(interaction: discord.Interaction, keyword: str, *, description: s
             'description': description,
             'author_nickname': interaction.author.display_name
         }
-        await interaction.send(f"{keyword}에 대한 설명이 저장되었습니다.")
+        await interaction.send(f"오케! ```{keyword}``` 라고 하면 ```{description}``` 라고 할게욧!")
     else:
-        await interaction.send(f"{keyword}는 이미 존재하는 키워드입니다. 저장되지 않았습니다.")
+        await interaction.send(f"```{keyword}```는 이미 알고 있다구욧!")
     # 정보 저장
     save_bot_info(bot_info)
 
+happiness_manager = Happiness()
+happiness_manager.load_from_file()
 
-@bot.hybrid_command(name='시이야', description='shii-bot 전용 명령어(베타)')
-async def say1(interaction: discord.Interaction, keyword: str):
+
+@bot.hybrid_command(name='호감도확인', description='당신과 시이간의 호감도를 확인합니다.')
+async def check_happiness(interaction: discord.Interaction):
+    server_id = str(interaction.guild.id)
+    user_id = str(interaction.author.id)
+    user_name = str(interaction.author.display_name)
+    current_happiness = happiness_manager.get_user_happiness(server_id, user_id)
+    embed = discord.Embed(title=f"시이가 보는 {user_name}", color=0xFFB2F5)
+    embed.add_field(name="호감도", value=f"레벨: {current_happiness}", inline=False)
+    embed.add_field(name="???", value="미안해요.. 아직 개발중 이라.. -개발자 올림-", inline=False)
+    await interaction.send(embed=embed)
+
+
+@bot.hybrid_command(name='시이야', description='키워드에 대한 설명을 확인합니다.')
+async def say(interaction: discord.Interaction, *, keyword: str):
     bot_info = load_bot_info()
+    server_id = str(interaction.guild.id)
+    user_id = str(interaction.author.id)
+    happiness_manager.increment_user_happiness(server_id, user_id, amount=1)
+    happiness_manager.save_to_file()
     info = bot_info.get(keyword)
-
-    if info:
-        author_nickname = info['author_nickname']
-        description = info['description']
-        response = f"{description}\n```{keyword}의 답변이예욧! {author_nickname}이(가) 알려줬어요!```"
-    else:
-        response = "그 키워드에 대한 설명을 찾을 수 없어요."
-
-    await interaction.send(response)
-
-
-@bot.hybrid_command(name='say', description="shii-bot 전용 명령어(구)")
-async def say(interaction: discord.Interaction, text: str):
-    print(interaction, text)
-    question = text
-    answer = get_answer(question)
-    await interaction.send(answer)
-    print(answer)
-
-
-def get_day_of_week():
-    weekday_list = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
-
-    weekday = weekday_list[datetime.today().weekday()]
-    date = datetime.today().strftime("%Y년 %m월 %d일")
-    result = '{}({})'.format(date, weekday)
-    return result
-
-
-def get_time():
-    return datetime.today().strftime("%H시 %M분 %S초")
-
-
-def get_answer(text):
-    trim_text = text.replace(" ", "")
-
-    answer_dict = {
+    word = {
         'hello': '안녕하세욧!',
         '안녕': '안녕하세요. 시이입니다!',
         '누구야': '안녕하세요. shii입니다!',
@@ -443,7 +474,7 @@ def get_answer(text):
         '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
         'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
         '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
-        '버전정보': '패치버전 v2.7.1',
+        '버전정보': '패치버전 v2.9.3',
         '과자': '음...과자하니까 과자 먹고 싶당',
         '뭐해?': '음.....일하죠 일! 크흠',
         '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
@@ -474,21 +505,32 @@ def get_answer(text):
         '베타커멘드': '베타 커멘드는 현재 태스트 중인 커멘드 입니다! 언제 생기고 사라질지 모르죠',
         '시이이모지': "<:__:1201865120368824360>"
     }
-
-    if trim_text == '' or None:
-        return "알 수 없는 단어입니다. 답변을 드릴 수 없을 것 같아요ㅠ"
-    elif trim_text in answer_dict.keys():
-        return answer_dict[trim_text]
+    if keyword == '' or None:
+        return
+    elif keyword in word.keys():
+        return await interaction.send(word[keyword])
     else:
-        for key in answer_dict.keys():
-            if key.find(trim_text) != -1:
-                return "연관 단어 [" + key + "]에 대한 답변이에요.\n" + answer_dict[key]
+        if info:
+            author_nickname = info['author_nickname']
+            description = info['description']
+            response = f"{description}\n```{keyword} 의 답변이예요. {author_nickname}이(가) 알려줬어요!``` "
+            await interaction.send(response)
+        else:
+            response = "으에.. 그게 뭐징?"
+            await interaction.send(response)
 
-        for key in answer_dict.keys():
-            if answer_dict[key].find(trim_text) != -1:
-                return "질문과 가장 유사한 질문 [" + key + "]에 대한 답변이에요.\n" + answer_dict[key]
 
-    return text + "은(는) 없는 질문입니다."
+def get_day_of_week():
+    weekday_list = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일']
+
+    weekday = weekday_list[datetime.today().weekday()]
+    date = datetime.today().strftime("%Y년 %m월 %d일")
+    result = '{}({})'.format(date, weekday)
+    return result
+
+
+def get_time():
+    return datetime.today().strftime("%H시 %M분 %S초")
 
 
 bot.run()
