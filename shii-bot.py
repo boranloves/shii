@@ -34,11 +34,26 @@ intents = discord.Intents.all()
 bot = Bot(intents=intents)
 NAVER_CAPTCHA_API_URL = 'https://openapi.naver.com/v1/captcha/nkey?code='
 NAVER_CAPTCHA_CHECK_URL = 'https://openapi.naver.com/v1/captcha/ncaptcha.bin?key='
-naver_client_id = 
-naver_client_secret = 
-KAKAO_API_KEY = 
+naver_client_id = ''
+naver_client_secret = ''
+KAKAO_API_KEY = ''
 server_data_path = 'server_data.json'
 happiness_file_path = 'happiness.json'
+money_file = 'user_money.json'
+url = ""
+
+# 사용자 돈 데이터를 불러오는 함수
+def load_money():
+    try:
+        with open(money_file, 'r') as file:
+            return json.load(file)
+    except FileNotFoundError:
+        return {}
+
+# 사용자 돈 데이터를 저장하는 함수
+def save_money(data):
+    with open(money_file, 'w') as file:
+        json.dump(data, file, indent=4)
 
 
 class Happiness:
@@ -300,6 +315,16 @@ async def game(interaction: discord.Interaction, user: str):  # user:str로 !gam
         print(f'{user} vs {bot}  내가 이겼당~.')
 
 
+@bot.hybrid_command(name='하트', description="시이봇 하트투표 확인(구걸 맞음 ㅇㅇ ~개발자왈~)")
+async def hert(interaction: discord.Interaction):
+    params = interaction.author.id
+    response = requests.post(url, params=params)
+    if response.status_code == 200:
+        await interaction.send("투표해 주셔서 감사합니다!!! (호감도 상승 코드 추가 예정..)")
+    else:
+        await interaction.send(f"하트 하나만 주세요ㅠ")
+        await interaction.send()
+
 @bot.hybrid_command(name='공지사항', description="시이봇의 공지를 볼 수 있어요!")
 async def announcement(interaction: discord.Interaction):
     embed = discord.Embed(title="시이봇 공지 사항", description="2024.02.04일 공지", color=0xFFB2F5)
@@ -350,11 +375,12 @@ async def roll(interaction: discord.Interaction):
 @bot.hybrid_command(name='프로필', description="프로필")
 async def embed(interaction: discord.Interaction):
     embed = discord.Embed(title=f"shii-bot <:__:1201865120368824360>", description="made by 보란이", color=0xFFB2F5)
+    embed.set_thumbnail(url='https://cdn.litt.ly/images/d7qircjSN5w6FNgD5Oh57blUjrfbBmCj?s=1200x1200&m=outside&f=webp')
     embed.add_field(name="사용가능 명령어", value="/say, /embed, /hello, /bye, /copy, /clear, /roll, /mining, /game 등등등...",
                     inline=False)
     embed.add_field(name="사용법", value="/를 사용하여 불러주세요!", inline=False)
     embed.add_field(name="호스팅", value="구글 클라우드 플렛폼(GCP)", inline=False)
-    embed.add_field(name="패치버전", value="v2.8.2", inline=False)
+    embed.add_field(name="패치버전", value="v2.10.3", inline=False)
     embed.set_footer(
         text="개인 정보 처리 방침: https://github.com/boranloves/shii-bot-discord/blob/main/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4%EC%B2%98%EB%A6%AC%EB%B0%A9%EC%B9%A8.txt")
     await interaction.send(embed=embed)
@@ -402,7 +428,7 @@ async def help(interaction: discord.Interaction):
     embed.add_field(name="/game", value="가위바위보 미니게임 입니다. 명령어뒤에 가위, 바위, 보 중 하나를 골라 쓸 수 있습니다.", inline=False)
     embed.add_field(name="/mining", value="광질 미니게임 입니다. 3개의 광물이 무작위로 나옵니다.", inline=False)
     embed.add_field(name="/roll", value="주사위 미니게임 입니다. 간단한 주사위 굴리기를 할 수 있습니다.", inline=False)
-    embed.set_footer(text="버전: v2.9.3")
+    embed.set_footer(text="버전: v2.10.3")
     await interaction.send(embed=embed)
 
 @bot.hybrid_command(name='호감도도움말', description="호감도 시스템 메뉴얼")
@@ -414,9 +440,9 @@ async def hhlep(interaction: discord.Interaction):
 
 @bot.hybrid_command(name="패치노트", description="시이봇 패치노트 보기")
 async def pt(interaction: discord.Interaction):
-    embed = discord.Embed(title="v2.9.3 패치노트", color=0xFFB2F5)
-    embed.add_field(name="신규기능", value="/say 커멘드 재거 및 /공지사항, 호감도 시스템, /시이야 커멘드 고정 단어 추가", inline=False)
-    embed.add_field(name="버그 수정", value="/시이야 커멘드에서 단어를 읽지 못하는 버그 수정", inline=False)
+    embed = discord.Embed(title="v2.10.3 패치노트", color=0xFFB2F5)
+    embed.add_field(name="신규기능", value="호감도 부가 기능 추가, 시이야 커멘드 on_message로 변경", inline=False)
+    embed.add_field(name="버그 수정", value="없음", inline=False)
     await interaction.send(embed=embed)
 
 
@@ -434,7 +460,7 @@ async def tell(interaction: discord.Interaction, keyword: str, *, description: s
             'description': description,
             'author_nickname': interaction.author.display_name
         }
-        await interaction.send(f"오케! ```{keyword}``` 라고 하면 ```{description}``` 라고 할게욧!")
+        await interaction.send(f"오케! ```{keyword}``` 라고 하면\n```{description}``` 라고 할게욧!")
     else:
         await interaction.send(f"```{keyword}```는 이미 알고 있다구욧!")
     # 정보 저장
@@ -450,74 +476,102 @@ async def check_happiness(interaction: discord.Interaction):
     user_id = str(interaction.author.id)
     user_name = str(interaction.author.display_name)
     current_happiness = happiness_manager.get_user_happiness(server_id, user_id)
+
+    # 호감도에 따라 메시지 조건 추가
+    if interaction.author.id == :
+        message = "저를 만드신 studio boran 개발자님 이시죳"
+        lv = "lv.max: 개발자"
+    elif 0 <= current_happiness <= 5:
+        message = "누구더라...흐음.."
+        lv = "lv.0: 모르는 사람"
+    elif 6 <= current_happiness <= 10:
+        message = "기억이 날락 말락...뭐였지"
+        lv = "lv.1: 아는사람"
+    elif 11 <= current_happiness <= 20:
+        message = f"{user_name}, 맞죠?!"
+        lv = "lv.2: 이름 외운 사람"
+    elif 21 <= current_happiness <= 50:
+        message = "우리 칭구 아이가?"
+        lv = "lv.3: 친구친구"
+    elif 50 <= current_happiness:
+        message = "베프베프!"
+        lv = "lv.4: 베스트 프렌즈"
     embed = discord.Embed(title=f"시이가 보는 {user_name}", color=0xFFB2F5)
-    embed.add_field(name="호감도", value=f"레벨: {current_happiness}", inline=False)
-    embed.add_field(name="???", value="미안해요.. 아직 개발중 이라.. -개발자 올림-", inline=False)
+    embed.set_thumbnail(url='https://cdn.litt.ly/images/d7qircjSN5w6FNgD5Oh57blUjrfbBmCj?s=1200x1200&m=outside&f=webp')
+    embed.add_field(name=":speech_balloon: 시이의 한마디", value=message, inline=False)
+    embed.add_field(name=f":heart: {lv}", value=f"호감도: {current_happiness}", inline=False)
+    embed.set_footer(text='{}'.format(get_time()))
     await interaction.send(embed=embed)
 
 
-@bot.hybrid_command(name='시이야', description='키워드에 대한 설명을 확인합니다.')
-async def say(interaction: discord.Interaction, *, keyword: str):
-    bot_info = load_bot_info()
-    server_id = str(interaction.guild.id)
-    user_id = str(interaction.author.id)
-    happiness_manager.increment_user_happiness(server_id, user_id, amount=1)
-    happiness_manager.save_to_file()
-    info = bot_info.get(keyword)
-    word = {
-        'hello': '안녕하세욧!',
-        '안녕': '안녕하세요. 시이입니다!',
-        '누구야': '안녕하세요. shii입니다!',
-        '요일': ':calendar: 오늘은 {}입니다'.format(get_day_of_week()),
-        '시간': ':clock9: 현재 시간은 {}입니다.'.format(get_time()),
-        '코딩': '코딩은 재밌어요',
-        '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
-        'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
-        '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
-        '버전정보': '패치버전 v2.9.3',
-        '과자': '음...과자하니까 과자 먹고 싶당',
-        '뭐해?': '음.....일하죠 일! 크흠',
-        '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
-        '이벤트': '흐음..이벤트는 아직 없어요ㅠㅠ',
-        '웃어': '히힛 (　＾▽＾)',
-        '맴매': '흐에에엥ㅠㅠㅜ방장님! 도와주세여(/´△`＼)',
-        '옥에티': '옥에티가 있을것같아요? 네, 아마 있을거예요 방장님이 아직 초짜라',
-        '잔소리해줘': '잔소리는 나쁜거예요 알겠어요?',
-        '유튜브': '유튜브 검색 기능은 /유튜브검색 으로 실행이 가능합니다!',
-        '크레딧': '전부다 보란이(그렇게 써있음 ㅇㅇ)',
-        '구멍': '구멍',
-        '개발자님': '개발자님이요? 좀, 쪼잔하긴해요(소곤소곤)',
-        '종': '댕댕대에에엥',
-        '할말없어?': '할말이요? 할말이요? 할말이요? 할말이요? 할말이요? 할말이요? 없어욧!',
-        '1+1은?': 'ㅏ? ERROR 시스탬을 정지합니다아(삐삐삐삐삐)',
-        '왭연동': '사이트 및 뉴스 연동은 현재는 업데이트 일정에 없습니다',
-        '애교': '이이잉...시져ㅕㅕㅕ',
-        '야근': '설마...야근 시킬 생각은 아니시죠?',
-        '아이싯떼루': '웩',
-        '애니': '~개발자왈~ 백성녀와 흑목사는 꼭 봐라',
-        '축구경기': '축구 경기 연동 기능은 현재 개발중 입니다. 빠른 시일내에 완성 하겠습니다!',
-        'help': '저와 대화 하실려면 /say 뒤에 질문을 넣어 불러주세요!',
-        '음악': '우리 개발자님은 류현준님의 노래를 좋아한데요. 네, TMI네용',
-        'GCP': '지금 시이봇은 GCP에서 실행되고 있습니다!',
-        '뭐야': '뭐지?',
-        '잘가': '잘가요!',
-        '뭐들어?': '앗, 류현준님의 난간이욧!',
-        '베타커멘드': '베타 커멘드는 현재 태스트 중인 커멘드 입니다! 언제 생기고 사라질지 모르죠',
-        '시이이모지': "<:__:1201865120368824360>"
-    }
-    if keyword == '' or None:
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
         return
-    elif keyword in word.keys():
-        return await interaction.send(word[keyword])
-    else:
-        if info:
-            author_nickname = info['author_nickname']
-            description = info['description']
-            response = f"{description}\n```{keyword} 의 답변이예요. {author_nickname}이(가) 알려줬어요!``` "
-            await interaction.send(response)
+    if message.content.startswith('시이야 '):
+        message1 = message.content[4:]
+        print(message1)
+        bot_info = load_bot_info()
+        server_id = str(message.guild.id)
+        user_id = str(message.author.id)
+        happiness_manager.increment_user_happiness(server_id, user_id, amount=1)
+        happiness_manager.save_to_file()
+        info = bot_info.get(message1)
+        word = {
+            f'{message.author.display_name}': f"저가 {message.author.display_name} 님을 모를리 없죠!",
+            'hello': '안녕하세욧!',
+            '안녕': '안녕하세요. 시이입니다!',
+            '누구야': '안녕하세요. shii입니다!',
+            '요일': ':calendar: 오늘은 {}입니다'.format(get_day_of_week()),
+            '시간': ':clock9: 현재 시간은 {}입니다.'.format(get_time()),
+            '코딩': '코딩은 재밌어요',
+            '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
+            'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
+            '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
+            '버전정보': '패치버전 v2.10.3',
+            '과자': '음...과자하니까 과자 먹고 싶당',
+            '뭐해?': '음.....일하죠 일! 크흠',
+            '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
+            '이벤트': '흐음..이벤트는 아직 없어요ㅠㅠ',
+            '웃어': '히힛 (　＾▽＾)',
+            '맴매': '흐에에엥ㅠㅠㅜ방장님! 도와주세여(/´△`＼)',
+            '옥에티': '옥에티가 있을것같아요? 네, 아마 있을거예요 방장님이 아직 초짜라',
+            '잔소리해줘': '잔소리는 나쁜거예요 알겠어요?',
+            '유튜브': '유튜브 검색 기능은 /유튜브검색 으로 실행이 가능합니다!',
+            '크레딧': '전부다 보란이(그렇게 써있음 ㅇㅇ)',
+            '구멍': '구멍',
+            '개발자님': '개발자님이요? 좀, 쪼잔하긴해요(소곤소곤)',
+            '종': '댕댕대에에엥',
+            '할말없어?': '할말이요? 할말이요? 할말이요? 할말이요? 할말이요? 할말이요? 없어욧!',
+            '1+1은?': 'ㅏ? ERROR 시스탬을 정지합니다아(삐삐삐삐삐)',
+            '왭연동': '사이트 및 뉴스 연동은 현재는 업데이트 일정에 없습니다',
+            '애교': '이이잉...시져ㅕㅕㅕ',
+            '야근': '설마...야근 시킬 생각은 아니시죠?',
+            '아이싯떼루': '웩',
+            '애니': '~개발자왈~ 백성녀와 흑목사는 꼭 봐라',
+            '축구경기': '축구 경기 연동 기능은 현재 개발중 입니다. 빠른 시일내에 완성 하겠습니다!',
+            'help': '저와 대화 하실려면 시이야 뒤에 질문을 넣어 불러주세요!',
+            '음악': '우리 개발자님은 류현준님의 노래를 좋아한데요. 네, TMI네용',
+            'GCP': '지금 시이봇은 GCP에서 실행되고 있습니다!',
+            '뭐야': '뭐지?',
+            '잘가': '잘가요!',
+            '뭐들어?': '앗, 류현준님의 난간이욧!',
+            '베타커멘드': '베타 커멘드는 현재 태스트 중인 커멘드 입니다! 언제 생기고 사라질지 모르죠',
+            '시이이모지': "<:__:1201865120368824360>"
+        }
+        if message1 == '' or None:
+            return
+        elif message1 in word.keys():
+            return await message.channel.send(word[message1])
         else:
-            response = "으에.. 그게 뭐징?"
-            await interaction.send(response)
+            if info:
+                author_nickname = info['author_nickname']
+                description = info['description']
+                response = f"{description}\n```{message1} 의 답변이예요. {author_nickname}이(가) 알려줬어요!``` "
+                await message.channel.send(response)
+            else:
+                response = "으에.. 그게 뭐징?"
+                await message.channel.send(response)
 
 
 def get_day_of_week():
