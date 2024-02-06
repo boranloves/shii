@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands, tasks
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 import asyncio
@@ -40,7 +40,36 @@ KAKAO_API_KEY = ''
 server_data_path = 'server_data.json'
 happiness_file_path = 'happiness.json'
 money_file = 'user_money.json'
-url = ""
+
+
+def get_school_code(school_name):
+    base_url = "https://open.neis.go.kr/hub/schoolInfo"
+    api_key = "5bd7c9f8880e41de91bb080791e863ee"
+    url = f"{base_url}?Type=json&pIndex=1&pSize=1&SCHUL_NM={school_name}&KEY={api_key}"
+
+    response = requests.get(url)
+    data = response.json()
+
+    try:
+        school_code = data['schoolInfo'][1]['row'][0]['ATPT_OFCDC_SC_CODE']
+        return school_code
+    except (KeyError, IndexError):
+        return None
+
+# 학교급식 정보 가져오기 함수
+def get_school_lunch(school_code, date=''):
+    base_url = 'https://open.neis.go.kr/hub/mealServiceDietInfo'
+    api_key = ''
+    url = f'{base_url}?Type=json&pIndex=1&pSize=1&KEY={api_key}&ATPT_OFCDC_SC_CODE=J10&SD_SCHUL_CODE={school_code}&MLSV_FROM_YMD={date}&MLSV_TO_YMD={date}'
+
+    response = requests.get(url)
+    data = response.json()
+
+    try:
+        menu = data['mealServiceDietInfo'][1]['row'][0]['DDISH_NM']
+        return menu
+    except (KeyError, IndexError):
+        return None
 
 # 사용자 돈 데이터를 불러오는 함수
 def load_money():
@@ -159,6 +188,28 @@ def remove_html_tags(text):
     return re.sub(clean, '', text)
 
 
+@bot.hybrid_command(name='급식', description="학교급식 2주 정보 보기")
+async def school_lunch(interaction: discord.Interaction, school_name: str):
+    school_code = get_school_code(school_name)
+
+    if school_code:
+        # 임베드 생성
+        embed = discord.Embed(title=f"{school_name} 급식", color=0x00ff00)
+
+        # 현재 날짜부터 30일 동안의 급식 정보 추가
+        today = datetime.today()
+        for i in range(14):
+            date = (today + timedelta(days=i)).strftime('%m%d')
+            lunch_menu = get_school_lunch(school_code, date)
+            if lunch_menu:
+                embed.add_field(name=f"{date}", value=lunch_menu)
+            else:
+                embed.add_field(name=f"{date}", value="해당 날짜의 급식 정보를 찾을 수 없습니다.")
+        await interaction.send(embed=embed)
+    else:
+        await interaction.send(f"{school_name} 를 찾을 수 없습니다.")
+
+
 @bot.hybrid_command(name='번역', description="source_lang: 원본 언어 target_lang: 번역할 언어 네이버 open api를 통한 번역(베타)")
 async def translate(interaction: discord.Interaction, source_lang, target_lang, *, text: str):
     translation = papago_translate(text, source_lang, target_lang)
@@ -202,7 +253,7 @@ async def search_kakao(interaction: discord.Interaction, *, text: str):
         await interaction.send(f'오류 발생: {e}')
 
 
-@bot.hybrid_command(name='네이버검색', description="네이버 open api를 통한 검색(베타)")
+@bot.hybrid_command(name='블로그검색', description="네이버 open api를 통한 검색(베타)")
 async def search(interaction: discord.Interaction, *, query):
     title, link = naver_search(query)
     html_text = title
@@ -212,17 +263,7 @@ async def search(interaction: discord.Interaction, *, query):
     await interaction.send(embed=embed)
 
 
-@bot.hybrid_command(name='hello', description="hi!")
-async def hello(interaction: discord.Interaction):
-    await interaction.reply(content="하이")
-
-
-@bot.hybrid_command(name='bye', description="bye!")
-async def bye(interaction: discord.Interaction):
-    await interaction.reply(content="빠이")
-
-
-@bot.hybrid_command(name='copy', description="메세지 복제")
+@bot.hybrid_command(name='따라하기', description="메세지 복제")
 async def copy(interaction: discord.Interaction, text1: str):
     await interaction.send(text1)
 
@@ -248,7 +289,7 @@ async def calculate_expression(ctx, *, expression):
         await ctx.send(f'계산 중 오류가 발생했습니다: {e}')
 
 
-@bot.hybrid_command(name='clear', description="메세지 청소")
+@bot.hybrid_command(name='메시지청소', description="메시지 청소")
 async def clear(interaction: discord.Interaction, amount: int):
     sent_message1 = await interaction.send("잠시 기다려 주세요")
     if not interaction.guild:
@@ -299,7 +340,7 @@ async def stop1(interaction: discord.Interaction):
         await interaction.send("봇이 존재하는 채널을 찾는 데 실패했습니다.")
 
 
-@bot.hybrid_command(name='game', description="가위바위보!")
+@bot.hybrid_command(name='가위바위보', description="가위바위보!")
 async def game(interaction: discord.Interaction, user: str):  # user:str로 !game 다음에 나오는 메시지를 받아줌
     rps_table = ['가위', '바위', '보']
     bot = random.choice(rps_table)
@@ -317,55 +358,53 @@ async def game(interaction: discord.Interaction, user: str):  # user:str로 !gam
 
 @bot.hybrid_command(name='하트', description="시이봇 하트투표 확인(구걸 맞음 ㅇㅇ ~개발자왈~)")
 async def hert(interaction: discord.Interaction):
+    headers = {
+        'Authorization': 
+        'Content-Type': 'application/json'
+    }
     params = interaction.author.id
-    response = requests.post(url, params=params)
+    response = requests.get(', headers=headers)
+    print(f'')
+    print(response.status_code)
     if response.status_code == 200:
         await interaction.send("투표해 주셔서 감사합니다!!! (호감도 상승 코드 추가 예정..)")
+    elif 400 <= response.status_code >= 500:
+        await interaction.send(f'버그가 발생하였습니다. 코드: {response.status_code}')
     else:
         await interaction.send(f"하트 하나만 주세요ㅠ")
-        await interaction.send()
+        await interaction.send("https://koreanbots.dev/bots/")
+
 
 @bot.hybrid_command(name='공지사항', description="시이봇의 공지를 볼 수 있어요!")
 async def announcement(interaction: discord.Interaction):
-    embed = discord.Embed(title="시이봇 공지 사항", description="2024.02.04일 공지", color=0xFFB2F5)
-    embed.add_field(name="/시이야, /알려주기 커멘드 관련 안내", value="현재, /알려주기 로 받은 단어들을 .json 파일에 저장하는 방식으로 코딩 되어있습니다. 간혹, 코드 업그레이드시 .json파일을 읽지 못하는 버그가 있어, 간혈적으로 /알려주기 커멘드로 저장한 단어들이 초기회 될 수 있습니다. 이점, 양해 부탁드립니다.", inline=False)
-    embed.add_field(name="호감도 시스템에 대하여..", value="호감도 시스템은, /시이야, /알려주기 커멘드에서 호감도를 올릴 수 있으며, 추후 호감도 레벨로 할 수 있는것들을 추가할 예정입니다.", inline=False)
+    embed = discord.Embed(title="시이봇 공지 사항", description="2024.02.06일 공지", color=0xFFB2F5)
+    embed.add_field(name="시이봇 개발 안내", value="시이봇 점검(개발) 기간은 매일 약 오후2시 부터 오후 6시 입니다. 이때는 시이봇이 멈출수도 있으니 양해 부탁드립니다.",
+                    inline=False)
+    embed.add_field(name="/급식 커멘드 공지", value="현재, /급식 커멘드가 초등학교만 코드가 실행되는(?) 버그가 있습니다. 그점 양해 부탁드립니다.", inline=False)
+    embed.add_field(name="/하트 커멘드 공지", value="/하트 커멘드는 한디리 봇 하트 투표로 호감도를 얻을수 있게끔 개발할 예정 입니다. 아직 개발중이니 양해 부탁드립니다.", inline=False)
     await interaction.send(embed=embed)
 
 
-@bot.hybrid_command(name='mining', description="광질을 하자")
-async def mining(interaction: discord.Interaction):
-    server_id = str(interaction.guild.id)
-    server_data = load_server_data()
+@bot.hybrid_command(name='봇상태', description="봇상태 확인")
+async def ping(interaction: discord.Interaction):
+    latency = round(bot.latency * 1000)  # 밀리초로 변환 및 반올림
+    embed = discord.Embed(title="시이봇", color=0xFFB2F5)
+    embed.add_field(name=f'핑: {latency}ms', value="{}".format(get_time()))
+    list_length = len(bot.guilds)
+    embed.add_field(name="서버수", value=f"{list_length}")
+    await interaction.send(embed=embed)
 
+
+@bot.hybrid_command(name='광질', description="광질을 하자")
+async def mining(interaction: discord.Interaction):
     minerals = ['다이아몬드', '루비', '에메랄드', '자수정', '철', '석탄']
     weights = [1, 3, 6, 15, 25, 50]
     results = random.choices(minerals, weights=weights, k=3)
-    # 개인 데이터 추가 또는 업데이트
-    user_id = str(interaction.author.id)
-    user_data = server_data.get(server_id, {}).get(user_id, [])
-    user_data.extend(results)
-    server_data.setdefault(server_id, {})[user_id] = user_data
-    save_server_data(server_id, server_data)
     await interaction.send(', '.join(results) + ' 광물들을 획득하였습니다.')
     print(', '.join(results) + ' 광물들을 획득하였습니다.')
 
 
-# 'myminerals' 슬래시 명령어 구현
-@bot.hybrid_command(name='myminerals', description="내가 획득한 광물 확인")
-async def myminerals(interaction: discord.Interaction):
-    server_id = str(interaction.guild.id)
-    user_id = str(interaction.author.id)
-    server_data = load_server_data()
-
-    user_data = server_data.get(server_id, {}).get(user_id, [])
-    if user_data:
-        await interaction.send(f"{interaction.author.display_name}님의 획득한 광물: {', '.join(user_data)}")
-    else:
-        await interaction.send("아직 광물을 획득하지 않았습니다.")
-
-
-@bot.hybrid_command(name='roll', description="주사위 굴리기")
+@bot.hybrid_command(name='주사위', description="주사위 굴리기")
 async def roll(interaction: discord.Interaction):
     randnum = random.randint(1, 6)  # 1이상 6이하 랜덤 숫자를 뽑음
     await interaction.send(f'주사위 결과는 {randnum} 입니다.')
@@ -374,13 +413,12 @@ async def roll(interaction: discord.Interaction):
 
 @bot.hybrid_command(name='프로필', description="프로필")
 async def embed(interaction: discord.Interaction):
-    embed = discord.Embed(title=f"shii-bot <:__:1201865120368824360>", description="made by 보란이", color=0xFFB2F5)
-    embed.set_thumbnail(url='https://cdn.litt.ly/images/d7qircjSN5w6FNgD5Oh57blUjrfbBmCj?s=1200x1200&m=outside&f=webp')
-    embed.add_field(name="사용가능 명령어", value="/say, /embed, /hello, /bye, /copy, /clear, /roll, /mining, /game 등등등...",
+    embed = discord.Embed(title="shii-bot <:__:1201865120368824360>", description="made by 보란이", color=0xFFB2F5)
+    embed.add_field(name="사용가능 명령어", value="시이야, /프로필, /따라하기, /메시지청소, /주사위, /광질, /가위바위보, /유튜브검색 등등등...",
                     inline=False)
     embed.add_field(name="사용법", value="/를 사용하여 불러주세요!", inline=False)
     embed.add_field(name="호스팅", value="구글 클라우드 플렛폼(GCP)", inline=False)
-    embed.add_field(name="패치버전", value="v2.10.3", inline=False)
+    embed.add_field(name="패치버전", value="v2.11.4", inline=False)
     embed.set_footer(
         text="개인 정보 처리 방침: https://github.com/boranloves/shii-bot-discord/blob/main/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4%EC%B2%98%EB%A6%AC%EB%B0%A9%EC%B9%A8.txt")
     await interaction.send(embed=embed)
@@ -411,7 +449,9 @@ async def member_stats(interaction: discord.Interaction):
 async def help(interaction: discord.Interaction):
     embed = discord.Embed(title="시이봇 명령어", color=0xFFB2F5)
     embed.add_field(name="/알려주기", value="시이봇 전용 명령어 입니다. 명령어뒤에 키워드와 설명을 입력하여 시이봇을 학습시킬 수 있습니다.", inline=False)
-    embed.add_field(name="/시이야", value="시이봇 전용 on_message 입니다. 알려주기로 학습한 키워드와 설명을 말합니다. /없이 실행 합니다.", inline=False)
+    embed.add_field(name="/급식", value="학교 급식을 볼 수 있는 명령어 입니다. 명령어뒤에 학교 이름을 입력해주세요.", inline=False)
+    embed.add_field(name="/하트", value="호감도를 얻을 수 있을 예정인 명령어 입니다. 한디리 봇 하트 투표후 호감도를 얻을수 있게끔 개발중 입니다.", inline=False)
+    embed.add_field(name="시이야", value="시이봇 전용 on_message 입니다. 알려주기로 학습한 키워드와 설명을 말합니다. /없이 실행 합니다.", inline=False)
     embed.add_field(name="/호감도확인, 호감도도움말", value="각각 호감도 확인, 호감도 도움말 입니다.", inline=False)
     embed.add_field(name="/번역", value="파파고 번역기능 입니다. 앞에는 시작언어, 뒤에는 도착언어를 입력하고, 마지막에 단어를 적어주세요", inline=False)
     embed.add_field(name="/패치노트", value="시이봇의 패치노트를 볼 수 있는 명령어 입니다.", inline=False)
@@ -422,13 +462,12 @@ async def help(interaction: discord.Interaction):
     embed.add_field(name="/임베드생성", value="임베드를 생성하는 기능 입니다. 총 2줄로 1,2번째는 타이틀과 설명, 3,4번째는 2번째줄 이름과 설명입니다.", inline=False)
     embed.add_field(name="/타이머", value="간단한 타이머 기능 입니다. 명령어뒤에 초를 입력하고, 선택적으로 메세지를 입력할 수 있습니다.", inline=False)
     embed.add_field(name="/프로필", value="시이봇의 프로필을 볼 수 있는 명령어 입니다.", inline=False)
-    embed.add_field(name="/hello, /bye", value="간단한 인사 입니다.", inline=False)
-    embed.add_field(name="/clear", value="메세지를 지우는 기능 입니다. 명령어뒤에 지울 메세지의 수를 입력할 수 있습니다.", inline=False)
-    embed.add_field(name="/copy", value="메세지를 따라 쓰는 기능입니다. 명령어뒤에 따라쓸 메세지의 내용을 입력할 수 있습니다.", inline=False)
-    embed.add_field(name="/game", value="가위바위보 미니게임 입니다. 명령어뒤에 가위, 바위, 보 중 하나를 골라 쓸 수 있습니다.", inline=False)
-    embed.add_field(name="/mining", value="광질 미니게임 입니다. 3개의 광물이 무작위로 나옵니다.", inline=False)
-    embed.add_field(name="/roll", value="주사위 미니게임 입니다. 간단한 주사위 굴리기를 할 수 있습니다.", inline=False)
-    embed.set_footer(text="버전: v2.10.3")
+    embed.add_field(name="/메시지청소", value="메시지를 지우는 기능 입니다. 명령어뒤에 지울 메시지의 수를 입력할 수 있습니다.", inline=False)
+    embed.add_field(name="/따라하기", value="메시지를 따라 쓰는 기능입니다. 명령어뒤에 따라쓸 메시지의 내용을 입력할 수 있습니다.", inline=False)
+    embed.add_field(name="/가위바위보", value="가위바위보 미니게임 입니다. 명령어뒤에 가위, 바위, 보 중 하나를 골라 쓸 수 있습니다.", inline=False)
+    embed.add_field(name="/광질", value="광질 미니게임 입니다. 3개의 광물이 무작위로 나옵니다.", inline=False)
+    embed.add_field(name="/주사위", value="주사위 미니게임 입니다. 간단한 주사위 굴리기를 할 수 있습니다.", inline=False)
+    embed.set_footer(text="버전: v2.11.4")
     await interaction.send(embed=embed)
 
 @bot.hybrid_command(name='호감도도움말', description="호감도 시스템 메뉴얼")
@@ -440,9 +479,9 @@ async def hhlep(interaction: discord.Interaction):
 
 @bot.hybrid_command(name="패치노트", description="시이봇 패치노트 보기")
 async def pt(interaction: discord.Interaction):
-    embed = discord.Embed(title="v2.10.3 패치노트", color=0xFFB2F5)
-    embed.add_field(name="신규기능", value="호감도 부가 기능 추가, 시이야 커멘드 on_message로 변경", inline=False)
-    embed.add_field(name="버그 수정", value="없음", inline=False)
+    embed = discord.Embed(title="v2.11.4 패치노트", color=0xFFB2F5)
+    embed.add_field(name="신규기능", value="/급식 커멘드 추가, /hello,bye 커멘드 제거 및 명령어 한글화", inline=False)
+    embed.add_field(name="버그 수정", value="시이야 커멘드를 on_message로 변경후, 슬래시 커멘드가 사용되지 않았던 버그 수정, /프로필 에서 타이틀이 이상해지는 버그 수정", inline=False)
     await interaction.send(embed=embed)
 
 
@@ -478,7 +517,7 @@ async def check_happiness(interaction: discord.Interaction):
     current_happiness = happiness_manager.get_user_happiness(server_id, user_id)
 
     # 호감도에 따라 메시지 조건 추가
-    if interaction.author.id == :
+    if interaction.author.id == 1049930743859650641:
         message = "저를 만드신 studio boran 개발자님 이시죳"
         lv = "lv.max: 개발자"
     elif 0 <= current_happiness <= 5:
@@ -528,7 +567,7 @@ async def on_message(message):
             '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
             'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
             '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
-            '버전정보': '패치버전 v2.10.3',
+            '버전정보': '패치버전 v2.11.4',
             '과자': '음...과자하니까 과자 먹고 싶당',
             '뭐해?': '음.....일하죠 일! 크흠',
             '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
@@ -572,6 +611,7 @@ async def on_message(message):
             else:
                 response = "으에.. 그게 뭐징?"
                 await message.channel.send(response)
+    await bot.process_commands(message)
 
 
 def get_day_of_week():
