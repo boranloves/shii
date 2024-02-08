@@ -27,7 +27,7 @@
 시이야
 
 ## 패치버전
--v2.11.4                          
+-v2.12.4                          
 
 ## shii-bot 공식 사이트
 -https://litt.ly/studio_boran                           
