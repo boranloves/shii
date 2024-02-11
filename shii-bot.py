@@ -15,7 +15,7 @@ why = ['으에?', '몰?루', '왜요용', '잉', '...?', '몰라여', '으에.. 
 
 class Bot(commands.Bot):
     def __init__(self, intents: discord.Intents, **kwargs):
-        super().__init__(command_prefix="/", intents=intents, case_insensitive=True)
+        super().__init__(command_prefix=["/", "시이 "], intents=intents, case_insensitive=True)
 
     async def on_ready(self):
         print(f"Logged in as {self.user}")
@@ -46,6 +46,26 @@ happiness_file_path = 'happiness.json'
 money_file = 'user_money.json'
 audio_file_path = "output.wav"
 mamo_file = 'mamo.json'
+lv_file = 'lv.json'
+start_time = datetime.now()
+
+
+# 경험치와 레벨을 로드하는 함수
+def load_experience():
+    try:
+        with open(lv_file, 'r') as file:
+            return json.load(file)
+    except FileNotFoundError:
+        return {}
+
+# 경험치와 레벨을 저장하는 함수
+def save_experience():
+    with open(lv_file, 'w') as file:
+        json.dump(experience, file, indent=4)
+
+# 경험치와 레벨 딕셔너리를 로드합니다.
+experience = load_experience()
+
 
 def get_school_code(school_name):
     base_url = "https://open.neis.go.kr/hub/schoolInfo"
@@ -416,6 +436,8 @@ async def view_stocks(interaction: discord.Interaction):
 @bot.hybrid_command(name="설날", description="새해복 많이 받으세요!")
 async def newyear(interaction: discord.Interaction):
     await interaction.send(f"{interaction.author.mention}! 새해복 많이 받으세요!")
+    await asyncio.sleep(3)
+    await interaction.send('그니까 용돈 주세요')
 
 
 @bot.hybrid_command(name='업다운시작', description="업다운 개임!(베타)")
@@ -637,10 +659,10 @@ async def hert(interaction: discord.Interaction):
 
 @bot.hybrid_command(name='공지사항', description="시이봇의 공지를 볼 수 있어요!")
 async def announcement(interaction: discord.Interaction):
-    embed = discord.Embed(title="시이봇 공지 사항", description="2024.02.06일 공지", color=0xFFB2F5)
+    embed = discord.Embed(title="시이봇 공지 사항", description="2024.02.11일 공지", color=0xFFB2F5)
     embed.add_field(name="시이봇 개발 안내", value="시이봇 점검(개발) 기간은 매일 약 오후2시 부터 오후 6시 입니다. 이때는 시이봇이 멈출수도 있으니 양해 부탁드립니다.",
                     inline=False)
-    embed.add_field(name="/하트 커멘드 공지", value="/하트 커멘드는 한디리 봇 하트 투표로 호감도를 얻을수 있게끔 개발할 예정 입니다. 아직 개발중이니 양해 부탁드립니다.",
+    embed.add_field(name="시이봇 공식 사이트 개발 공지", value="이번에 shii.me 도매인을 얻었습니다. 그래서 현재 사이트 개발중 이니 많은관심 부탁드립니다!",
                     inline=False)
     await interaction.send(embed=embed)
 
@@ -653,9 +675,12 @@ async def ping(interaction: discord.Interaction):
     end_time = message5.created_at  # 메시지를 전송한 시간
     await message5.delete()
     latency = (end_time - start_time).total_seconds() * 1000
+    current_time = datetime.now()
+    uptime = current_time - start_time
     embed = discord.Embed(title="퐁!", color=0xFFB2F5)
     embed.add_field(name=f'REST ping', value=f"```{latency}ms```")
     embed.add_field(name=f'Gateway ping', value=f"```{message_latency}ms```")
+    embed.add_field(name=f'업타임', value=f"```{uptime}```")
     list_length = len(bot.guilds)
     embed.add_field(name="서버수", value=f"```{list_length}```")
     embed.set_footer(text='{}'.format(get_time()))
@@ -685,7 +710,7 @@ async def embed(interaction: discord.Interaction):
                     inline=False)
     embed.add_field(name="사용법", value="/를 사용하여 불러주세요!", inline=False)
     embed.add_field(name="호스팅", value="구글 클라우드 플렛폼(GCP)", inline=False)
-    embed.add_field(name="패치버전", value="v2.14.6", inline=False)
+    embed.add_field(name="패치버전", value="v2.14.7", inline=False)
     embed.set_footer(
         text="개인 정보 처리 방침: https://github.com/boranloves/shii-bot-discord/blob/main/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4%EC%B2%98%EB%A6%AC%EB%B0%A9%EC%B9%A8.txt")
     await interaction.send(embed=embed)
@@ -714,15 +739,14 @@ async def member_stats(interaction: discord.Interaction):
 
 @bot.hybrid_command(name='도움말', description="시이봇 메뉴얼")
 async def help(interaction: discord.Interaction):
-    embed = discord.Embed(title="안녕하세요, 시이입니다!", description="귀여운 챗봇 하나쯤, 시이", color=0xFFB2F5)
+    embed = discord.Embed(title="안녕하세요, 시이입니다!", description="귀여운 챗봇 하나쯤, 시이\n'시이야'라고 불러주세요!", color=0xFFB2F5)
     embed.set_thumbnail(url='https://cdn.litt.ly/images/d7qircjSN5w6FNgD5Oh57blUjrfbBmCj?s=1200x1200&m=outside&f=webp')
-    embed.add_field(name="'시이야'라고 불러주세요!", value="", inline=False)
     embed.add_field(name="**일반**", value="핑, 하트, 번역, 패치노트, 네이버검색, 유튜브검색, 블로그검색, 계산, 인원통계, 타이머, 프로필, 급식, 메모쓰기, 메모불러오기, 공지사항, 패치노트", inline=False)
     embed.add_field(name="**재미**", value="알려주기, 급식, 호감도확인, 호감도도움말, 가위바위보, 광질, 주사위, 업다운시작, 업다운, 설날", inline=False)
     embed.add_field(name="**주식**", value="주식매수, 주식매도, 가격보기, 자본")
     embed.add_field(name="**보이스**", value="음성채널입장, 음성채널퇴장", inline=False)
     embed.add_field(name="**관리**", value="클리어, 임베드생성", inline=False)
-    embed.set_footer(text="버전: v2.14.6")
+    embed.set_footer(text="버전: v2.14.7")
     await interaction.send(embed=embed)
 
 
@@ -737,9 +761,9 @@ async def hhlep(interaction: discord.Interaction):
 
 @bot.hybrid_command(name="패치노트", description="시이봇 패치노트 보기")
 async def pt(interaction: discord.Interaction):
-    embed = discord.Embed(title="v2.14.6 패치노트", color=0xFFB2F5)
-    embed.add_field(name="신규기능", value="/메모쓰기, /메모불러오기 추가", inline=False)
-    embed.add_field(name="버그 수정", value="/핑 에서 게이트웨이핑과 메시지핑이 같은 버그 수정",
+    embed = discord.Embed(title="v2.14.7 패치노트", color=0xFFB2F5)
+    embed.add_field(name="신규기능", value="/와 함깨 시이 로 명령어를 실행가능 하게 변경", inline=False)
+    embed.add_field(name="버그 수정", value="없음",
                     inline=False)
     await interaction.send(embed=embed)
 
@@ -811,10 +835,36 @@ async def check_happiness(interaction: discord.Interaction):
 bad_words = ['ㅆㅂ', '씨발', '좆', 'ㅈ까', 'ㅈㄹ', '지랄', '느금마', '니애미', '옘병']
 
 
+@bot.hybrid_command(name='레벨확인', description='레벨을 확인합니다.')
+async def lv_see(interaction: discord.Interaction):
+    server_id = str(interaction.guild.id)
+    user_id = str(interaction.author.id)
+    if user_id in experience and server_id in experience[user_id]:
+        level = experience[user_id][server_id]['level']
+        exp = experience[user_id][server_id]['exp']
+        embed = discord.Embed(title=f"{interaction.author.display_name} 의 정보", color=0xFFB2F5)
+        embed.add_field(name=f"lv.{level}", value=f"경험치: {exp}")
+        await interaction.send(embed=embed)
+    else:
+        await interaction.send(f"{interaction.author.mention}님의 정보를 찾을 수 없습니다.")
+
+
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
         return
+    user_id = str(message.author.id)
+    server_id = str(message.guild.id)
+    if user_id not in experience:
+        experience[user_id] = {}
+    if server_id not in experience[user_id]:
+        experience[user_id][server_id] = {'exp': 0, 'level': 1}
+    experience[user_id][server_id]['exp'] += 1
+    if experience[user_id][server_id]['exp'] >= 2 * experience[user_id][server_id]['level']:
+        experience[user_id][server_id]['level'] += 1
+        experience[user_id][server_id]['exp'] = 0
+    save_experience()
+
     if message.content.startswith('시이야 '):
         message1 = message.content[4:]
         bot_info = load_bot_info()
@@ -834,7 +884,7 @@ async def on_message(message):
             '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
             'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
             '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
-            '패치버전': '패치버전 v2.14.6',
+            '패치버전': '패치버전 v2.14.7',
             '과자': '음...과자하니까 과자 먹고 싶당',
             '뭐해?': '음.....일하죠 일! 크흠',
             '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
@@ -849,7 +899,6 @@ async def on_message(message):
             '개발자님': '개발자님이요? 좀, 쪼잔하긴해요(소곤소곤)',
             '종': '댕댕대에에엥',
             '할말없어?': '할말이요? 할말이요? 할말이요? 할말이요? 할말이요? 할말이요? 없어욧!',
-            '1+1은?': 'ㅏ? ERROR 시스탬을 정지합니다아(삐삐삐삐삐)',
             '왭연동': '사이트 및 뉴스 연동은 현재는 업데이트 일정에 없습니다',
             '애교': '이이잉...시져ㅕㅕㅕ',
             '야근': '설마...야근 시킬 생각은 아니시죠?',
@@ -876,7 +925,7 @@ async def on_message(message):
             if info:
                 author_nickname = info['author_nickname']
                 description = info['description']
-                response = f"{description}\n```{message1} 의 답변이예요. {author_nickname}이(가) 알려줬어요!``` "
+                response = f"{description}\n```{author_nickname}이(가) 알려줬어요!```"
                 await message.channel.send(response)
             else:
                 whyresponse = random.randint(0, 7)
