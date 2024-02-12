@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands, tasks
 from datetime import datetime, timedelta
 import json
+import time
 import os
 import asyncio
 from youtube_search import YoutubeSearch
@@ -10,12 +11,12 @@ import requests
 from koreanbots.integrations.discord import DiscordpyKoreanbots
 import random
 import re
-
+start_times = time.time()
 why = ['으에?', '몰?루', '왜요용', '잉', '...?', '몰라여', '으에.. 그게 뭐징?', '네?']
 
 class Bot(commands.Bot):
     def __init__(self, intents: discord.Intents, **kwargs):
-        super().__init__(command_prefix=["/", "시이 "], intents=intents, case_insensitive=True)
+        super().__init__(command_prefix=["/", "!", "시이 "], intents=intents, case_insensitive=True)
 
     async def on_ready(self):
         print(f"Logged in as {self.user}")
@@ -459,6 +460,7 @@ async def guess_number(interaction: discord.Interaction, number: int):
         game = None
 
 
+
 @bot.hybrid_command(name='업다운종료', description="업다운게임 종료하기")
 async def end_game(interaction: discord.Interaction):
     global game
@@ -467,6 +469,19 @@ async def end_game(interaction: discord.Interaction):
     else:
         game = None
         await interaction.send('업다운 게임이 종료되었습니다.')
+
+
+@bot.hybrid_command(name="고양이", description="랜덤으로 고양이 사진을 불러옵니다")
+async def cat(interaction: discord.Interaction):
+    cat_image_url = get_random_cat()
+    await interaction.send(cat_image_url)
+
+
+def get_random_cat():
+    response = requests.get('https://api.thecatapi.com/v1/images/search')
+    data = response.json()
+    return data[0]['url']
+
 
 
 @bot.hybrid_command(name='급식', description="학교급식 2주 정보 보기")
@@ -544,11 +559,6 @@ async def search(interaction: discord.Interaction, *, query):
     await interaction.send(embed=embed)
 
 
-@bot.hybrid_command(name='따라하기', description="메세지 복제")
-async def copy(interaction: discord.Interaction, text1: str):
-    await interaction.send(text1)
-
-
 @bot.hybrid_command(name='유튜브검색', description="유튜브 검색(베타)")
 async def youtube_search(interaction: discord.Interaction, *, query: str):
     results = YoutubeSearch(query, max_results=1).to_dict()
@@ -559,6 +569,7 @@ async def youtube_search(interaction: discord.Interaction, *, query: str):
         await interaction.send(f'검색 결과: {video_title}\n링크: {video_url}')
     else:
         await interaction.send('검색 결과를 찾을 수 없습니다.')
+
 
 
 @bot.hybrid_command(name='계산', description="수식을 계산합니다.")
@@ -667,23 +678,31 @@ async def announcement(interaction: discord.Interaction):
     await interaction.send(embed=embed)
 
 
+def get_timestamp():
+    return int(time.time())
+
+
 @bot.hybrid_command(name='핑', description="퐁!")
 async def ping(interaction: discord.Interaction):
-    message_latency = round(bot.latency * 1000, 2)  # 밀리초로 변환하여 반올림
+    message_latency = round(bot.latency * 1000, 2)
+
     start_time = interaction.message.created_at
     message5 = await interaction.send("메시지 핑 측정중...")
-    end_time = message5.created_at  # 메시지를 전송한 시간
+    end_time = message5.created_at
     await message5.delete()
     latency = (end_time - start_time).total_seconds() * 1000
-    current_time = datetime.now()
-    uptime = current_time - start_time
+
+    current_time = time.time()
+    uptime_seconds = current_time - start_times
+    uptime_minutes = uptime_seconds // 60
+
     embed = discord.Embed(title="퐁!", color=0xFFB2F5)
     embed.add_field(name=f'REST ping', value=f"```{latency}ms```")
     embed.add_field(name=f'Gateway ping', value=f"```{message_latency}ms```")
-    embed.add_field(name=f'업타임', value=f"```{uptime}```")
+    embed.add_field(name=f'업타임', value=f"```{uptime_minutes}분```")
     list_length = len(bot.guilds)
     embed.add_field(name="서버수", value=f"```{list_length}```")
-    embed.set_footer(text='{}'.format(get_time()))
+    embed.set_footer(text='{}'.format(get_timestamp()))
     await interaction.send(embed=embed)
 
 
@@ -703,16 +722,38 @@ async def roll(interaction: discord.Interaction):
     print(f'주사위 결과는 {randnum} 입니다.')
 
 
-@bot.hybrid_command(name='프로필', description="프로필")
-async def embed(interaction: discord.Interaction):
-    embed = discord.Embed(title="shii-bot <:__:1201865120368824360>", description="made by 보란이", color=0xFFB2F5)
-    embed.add_field(name="사용가능 명령어", value="시이야, /프로필, /따라하기, /메시지청소, /주사위, /광질, /가위바위보, /유튜브검색 등등등...",
-                    inline=False)
-    embed.add_field(name="사용법", value="/를 사용하여 불러주세요!", inline=False)
-    embed.add_field(name="호스팅", value="구글 클라우드 플렛폼(GCP)", inline=False)
-    embed.add_field(name="패치버전", value="v2.14.7", inline=False)
-    embed.set_footer(
-        text="개인 정보 처리 방침: https://github.com/boranloves/shii-bot-discord/blob/main/%EA%B0%9C%EC%9D%B8%EC%A0%95%EB%B3%B4%EC%B2%98%EB%A6%AC%EB%B0%A9%EC%B9%A8.txt")
+@bot.hybrid_command(name='프로필', description="프로필를 봅니다")
+async def dp(interaction: discord.Interaction, member: discord.Member = None):
+    print(member)
+    if not member:
+        member = interaction.user
+    embed = discord.Embed(color=0xFFB2F5)
+    embed.set_image(url=member.avatar)
+    await interaction.send(embed=embed)
+
+
+@bot.hybrid_command(name="내정보", description='내 정보를 봅니다')
+async def propill(interaction: discord.Interaction):
+    member = interaction.author
+    roles = member.roles
+    role_names = [role.name for role in roles]
+    server_id = str(interaction.guild.id)
+    user_id = str(interaction.author.id)
+    user_name = str(interaction.author.display_name)
+    current_happiness = happiness_manager.get_user_happiness(server_id, user_id)
+    server_id = str(interaction.guild.id)
+    user_id = str(interaction.author.id)
+    capital = load_capital()
+    embed = discord.Embed(title=f"{user_name} 님의 정보", color=0xFFB2F5)
+    if not member:
+        member = interaction.user
+    embed.set_thumbnail(url=member.avatar)
+    embed.add_field(name="호감도", value=f":heart: {current_happiness}")
+    if server_id in capital and user_id in capital[server_id]:
+        embed.add_field(name="자본", value=f"${capital[server_id][user_id]}")
+    else:
+        embed.add_field(name="자본", value="아직 주식을 시작하지 않았습니다.")
+
     await interaction.send(embed=embed)
 
 
@@ -742,11 +783,11 @@ async def help(interaction: discord.Interaction):
     embed = discord.Embed(title="안녕하세요, 시이입니다!", description="귀여운 챗봇 하나쯤, 시이\n'시이야'라고 불러주세요!", color=0xFFB2F5)
     embed.set_thumbnail(url='https://cdn.litt.ly/images/d7qircjSN5w6FNgD5Oh57blUjrfbBmCj?s=1200x1200&m=outside&f=webp')
     embed.add_field(name="**일반**", value="핑, 하트, 번역, 패치노트, 네이버검색, 유튜브검색, 블로그검색, 계산, 인원통계, 타이머, 프로필, 급식, 메모쓰기, 메모불러오기, 공지사항, 패치노트", inline=False)
-    embed.add_field(name="**재미**", value="알려주기, 급식, 호감도확인, 호감도도움말, 가위바위보, 광질, 주사위, 업다운시작, 업다운, 설날", inline=False)
+    embed.add_field(name="**재미**", value="고양이 ,알려주기, 급식, 호감도확인, 호감도도움말, 가위바위보, 광질, 주사위, 업다운시작, 업다운, 설날", inline=False)
     embed.add_field(name="**주식**", value="주식매수, 주식매도, 가격보기, 자본")
     embed.add_field(name="**보이스**", value="음성채널입장, 음성채널퇴장", inline=False)
-    embed.add_field(name="**관리**", value="클리어, 임베드생성", inline=False)
-    embed.set_footer(text="버전: v2.14.7")
+    embed.add_field(name="**관리**", value="내정보, 프로필, 클리어, 임베드생성", inline=False)
+    embed.set_footer(text="버전: v2.15.7")
     await interaction.send(embed=embed)
 
 
@@ -761,14 +802,14 @@ async def hhlep(interaction: discord.Interaction):
 
 @bot.hybrid_command(name="패치노트", description="시이봇 패치노트 보기")
 async def pt(interaction: discord.Interaction):
-    embed = discord.Embed(title="v2.14.7 패치노트", color=0xFFB2F5)
-    embed.add_field(name="신규기능", value="/와 함깨 시이 로 명령어를 실행가능 하게 변경", inline=False)
+    embed = discord.Embed(title="v2.15.7 패치노트", color=0xFFB2F5)
+    embed.add_field(name="신규기능", value="신규 커멘드 /고양이, /내정보 추가, /프로필 코드 수정, 접두사 ! 추가", inline=False)
     embed.add_field(name="버그 수정", value="없음",
                     inline=False)
     await interaction.send(embed=embed)
 
 
-@bot.hybrid_command(name='알려주기', description='시이봇에게 많은걸 알려주세요!(베타)')
+@bot.hybrid_command(name='가르치기', description='시이봇에게 많은걸 알려주세요!(베타)')
 async def tell(interaction: discord.Interaction, keyword: str, *, description: str):
     bot_info = load_bot_info()
     server_id = str(interaction.guild.id)
@@ -833,104 +874,83 @@ async def check_happiness(interaction: discord.Interaction):
     await interaction.send(embed=embed)
 
 bad_words = ['ㅆㅂ', '씨발', '좆', 'ㅈ까', 'ㅈㄹ', '지랄', '느금마', '니애미', '옘병']
-
-
-@bot.hybrid_command(name='레벨확인', description='레벨을 확인합니다.')
-async def lv_see(interaction: discord.Interaction):
-    server_id = str(interaction.guild.id)
-    user_id = str(interaction.author.id)
-    if user_id in experience and server_id in experience[user_id]:
-        level = experience[user_id][server_id]['level']
-        exp = experience[user_id][server_id]['exp']
-        embed = discord.Embed(title=f"{interaction.author.display_name} 의 정보", color=0xFFB2F5)
-        embed.add_field(name=f"lv.{level}", value=f"경험치: {exp}")
-        await interaction.send(embed=embed)
-    else:
-        await interaction.send(f"{interaction.author.mention}님의 정보를 찾을 수 없습니다.")
-
+wordshii = ['넹!', '왜 그러세용?', '시이예용!', '필요 하신거 있으신가요?', '뭘 도와드릴까요?', '반가워용', '저 부르셨나요?', '왜요용', '잉', '...?', '네?']
 
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
         return
-    user_id = str(message.author.id)
-    server_id = str(message.guild.id)
-    if user_id not in experience:
-        experience[user_id] = {}
-    if server_id not in experience[user_id]:
-        experience[user_id][server_id] = {'exp': 0, 'level': 1}
-    experience[user_id][server_id]['exp'] += 1
-    if experience[user_id][server_id]['exp'] >= 2 * experience[user_id][server_id]['level']:
-        experience[user_id][server_id]['level'] += 1
-        experience[user_id][server_id]['exp'] = 0
-    save_experience()
-
-    if message.content.startswith('시이야 '):
-        message1 = message.content[4:]
-        bot_info = load_bot_info()
-        server_id = str(message.guild.id)
-        user_id = str(message.author.id)
-        happiness_manager.increment_user_happiness(server_id, user_id, amount=1)
-        happiness_manager.save_to_file()
-        info = bot_info.get(message1)
-        word = {
-            f'{message.author.display_name}': f"저가 {message.author.display_name} 님을 모를리 없죠!",
-            'hello': '안녕하세욧!',
-            '안녕': '안녕하세요. 시이입니다!',
-            '누구야': '안녕하세요. shii입니다!',
-            '요일': ':calendar: 오늘은 {}입니다'.format(get_day_of_week()),
-            '시간': ':clock9: 현재 시간은 {}입니다.'.format(get_time()),
-            '코딩': '코딩은 재밌어요',
-            '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
-            'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
-            '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
-            '패치버전': '패치버전 v2.14.7',
-            '과자': '음...과자하니까 과자 먹고 싶당',
-            '뭐해?': '음.....일하죠 일! 크흠',
-            '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
-            '이벤트': '흐음..이벤트는 아직 없어요ㅠㅠ',
-            '웃어': '히힛 (　＾▽＾)',
-            '맴매': '흐에에엥ㅠㅠㅜ방장님! 도와주세여(/´△`＼)',
-            '옥에티': '옥에티가 있을것같아요? 네, 아마 있을거예요 방장님이 아직 초짜라',
-            '잔소리해줘': '잔소리는 나쁜거예요 알겠어요?',
-            '유튜브': '유튜브 검색 기능은 /유튜브검색 으로 실행이 가능합니다!',
-            '크레딧': '전부다 보란이(그렇게 써있음 ㅇㅇ)',
-            '구멍': '구멍',
-            '개발자님': '개발자님이요? 좀, 쪼잔하긴해요(소곤소곤)',
-            '종': '댕댕대에에엥',
-            '할말없어?': '할말이요? 할말이요? 할말이요? 할말이요? 할말이요? 할말이요? 없어욧!',
-            '왭연동': '사이트 및 뉴스 연동은 현재는 업데이트 일정에 없습니다',
-            '애교': '이이잉...시져ㅕㅕㅕ',
-            '야근': '설마...야근 시킬 생각은 아니시죠?',
-            '아이싯떼루': '웩',
-            '애니': '~개발자왈~ 백성녀와 흑목사는 꼭 봐라',
-            '축구경기': '축구 경기 연동 기능은 현재 개발중 입니다. 빠른 시일내에 완성 하겠습니다!',
-            'help': '저와 대화 하실려면 시이야 뒤에 질문을 넣어 불러주세요!',
-            '음악': '우리 개발자님은 류현준님의 노래를 좋아한데요. 네, TMI네용',
-            'GCP': '지금 시이봇은 GCP에서 실행되고 있습니다!',
-            '뭐야': '뭐지?',
-            '잘가': '잘가요!',
-            '뭐들어?': '앗, 류현준님의 난간이욧!',
-            '베타커멘드': '베타 커멘드는 현재 태스트 중인 커멘드 입니다! 언제 생기고 사라질지 모르죠',
-            '시이이모지': "<:__:1201865120368824360>"
-        }
-        if message1 == '' or None:
-            whyresponse = random.randint(0, 7)
-            response = why[whyresponse]
-            await message.channel.send(response)
+    if message.content.startswith('시이야'):
+        if not message.content.startswith('시이야 '):
+            wordss = random.randint(0, 10)
+            await message.channel.send(wordshii[wordss])
             return
-        elif message1 in word.keys():
-            return await message.channel.send(word[message1])
-        else:
-            if info:
-                author_nickname = info['author_nickname']
-                description = info['description']
-                response = f"{description}\n```{author_nickname}이(가) 알려줬어요!```"
-                await message.channel.send(response)
-            else:
+        if message.content.startswith('시이야 '):
+            message1 = message.content[4:]
+            bot_info = load_bot_info()
+            server_id = str(message.guild.id)
+            user_id = str(message.author.id)
+            happiness_manager.increment_user_happiness(server_id, user_id, amount=1)
+            happiness_manager.save_to_file()
+            info = bot_info.get(message1)
+            word = {
+                f'{message.author.display_name}': f"저가 {message.author.display_name} 님을 모를리 없죠!",
+                'hello': '안녕하세욧!',
+                '안녕': '안녕하세요. 시이입니다!',
+                '누구야': '안녕하세요. shii입니다!',
+                '요일': ':calendar: 오늘은 {}입니다'.format(get_day_of_week()),
+                '시간': ':clock9: 현재 시간은 {}입니다.'.format(get_time()),
+                '코딩': '코딩은 재밌어요',
+                '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
+                'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
+                '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
+                '패치버전': '패치버전 v2.15.7',
+                '과자': '음...과자하니까 과자 먹고 싶당',
+                '뭐해?': '음.....일하죠 일! 크흠',
+                '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
+                '이벤트': '흐음..이벤트는 아직 없어요ㅠㅠ',
+                '웃어': '히힛 (　＾▽＾)',
+                '맴매': '흐에에엥ㅠㅠㅜ방장님! 도와주세여(/´△`＼)',
+                '옥에티': '옥에티가 있을것같아요? 네, 아마 있을거예요 방장님이 아직 초짜라',
+                '잔소리해줘': '잔소리는 나쁜거예요 알겠어요?',
+                '유튜브': '유튜브 검색 기능은 /유튜브검색 으로 실행이 가능합니다!',
+                '크레딧': '전부다 보란이(그렇게 써있음 ㅇㅇ)',
+                '구멍': '구멍',
+                '개발자님': '개발자님이요? 좀, 쪼잔하긴해요(소곤소곤)',
+                '종': '댕댕대에에엥',
+                '할말없어?': '할말이요? 할말이요? 할말이요? 할말이요? 할말이요? 할말이요? 없어욧!',
+                '왭연동': '사이트 및 뉴스 연동은 현재는 업데이트 일정에 없습니다',
+                '애교': '이이잉...시져ㅕㅕㅕ',
+                '야근': '설마...야근 시킬 생각은 아니시죠?',
+                '아이싯떼루': '웩',
+                '애니': '~개발자왈~ 백성녀와 흑목사는 꼭 봐라',
+                '축구경기': '축구 경기 연동 기능은 현재 개발중 입니다. 빠른 시일내에 완성 하겠습니다!',
+                'help': '저와 대화 하실려면 시이야 뒤에 질문을 넣어 불러주세요!',
+                '음악': '우리 개발자님은 류현준님의 노래를 좋아한데요. 네, TMI네용',
+                'GCP': '지금 시이봇은 GCP에서 실행되고 있습니다!',
+                '뭐야': '뭐지?',
+                '잘가': '잘가요!',
+                '뭐들어?': '앗, 류현준님의 난간이욧!',
+                '베타커멘드': '베타 커멘드는 현재 태스트 중인 커멘드 입니다! 언제 생기고 사라질지 모르죠',
+                '시이이모지': "<:__:1201865120368824360>"
+            }
+            if message1 == '' or None:
                 whyresponse = random.randint(0, 7)
                 response = why[whyresponse]
                 await message.channel.send(response)
+                return
+            elif message1 in word.keys():
+                return await message.channel.send(word[message1])
+            else:
+                if info:
+                    author_nickname = info['author_nickname']
+                    description = info['description']
+                    response = f"{description}\n```{author_nickname}이(가) 알려줬어요!```"
+                    await message.channel.send(response)
+                else:
+                    whyresponse = random.randint(0, 7)
+                    response = why[whyresponse]
+                    await message.channel.send(response)
     await bot.process_commands(message)
 
 
