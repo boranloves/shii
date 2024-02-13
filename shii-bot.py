@@ -11,6 +11,8 @@ import requests
 from koreanbots.integrations.discord import DiscordpyKoreanbots
 import random
 import re
+from korcen import korcen
+
 start_times = time.time()
 why = ['으에?', '몰?루', '왜요용', '잉', '...?', '몰라여', '으에.. 그게 뭐징?', '네?']
 
@@ -33,12 +35,18 @@ class Bot(commands.Bot):
                 json.dump({}, file)
 
 
+class BotSettings:
+    def __init__(self):
+        self.detect_swearing = False
+
+
 json_file_path = 'bot_info.json'
 attendance_file = 'attendance.json'
 intents = discord.Intents.all()
 bot = Bot(intents=intents)
 NAVER_CAPTCHA_API_URL = 'https://openapi.naver.com/v1/captcha/nkey?code='
 NAVER_CAPTCHA_CHECK_URL = 'https://openapi.naver.com/v1/captcha/ncaptcha.bin?key='
+KITSU_API_URL = "https://kitsu.io/api/edge/anime"
 naver_client_id = ''
 naver_client_secret = ''
 KAKAO_API_KEY = ''
@@ -48,8 +56,9 @@ money_file = 'user_money.json'
 audio_file_path = "output.wav"
 mamo_file = 'mamo.json'
 lv_file = 'lv.json'
+SETTINGS_FILE = "bot_settings.json"
 start_time = datetime.now()
-
+settings = BotSettings()
 
 # 경험치와 레벨을 로드하는 함수
 def load_experience():
@@ -66,6 +75,25 @@ def save_experience():
 
 # 경험치와 레벨 딕셔너리를 로드합니다.
 experience = load_experience()
+
+def search_anime(query):
+    # Kitsu API로 애니를 검색하는 함수
+    response = requests.get(KITSU_API_URL, params={"filter[text]": query})
+    if response.status_code == 200:
+        data = response.json()
+        if data['data']:  # 결과가 있는 경우
+            anime = data['data'][0]
+            attributes = anime['attributes']
+            title = attributes['canonicalTitle']
+            synopsis = attributes['synopsis']
+            rating = attributes['averageRating']
+            episodes = attributes['episodeCount']
+            cover_image = attributes['posterImage']['original']
+            embed = discord.Embed(title=f"**{title}**", description=f"평점: {rating}", color=0xFFB2F5)
+            embed.set_thumbnail(url=cover_image)
+            embed.add_field(name="에피소드 수", value=f"`{episodes}` 편", inline=False)
+            return embed
+    return None
 
 
 def get_school_code(school_name):
@@ -158,6 +186,22 @@ class UpDownGame:
 
 # 업다운 게임 인스턴스 생성
 game = UpDownGame()
+
+def save_settings():
+    with open(SETTINGS_FILE, 'w') as file:
+        json.dump(settings.__dict__, file)
+
+# 설정 로드 함수
+def load_settings():
+    try:
+        with open(SETTINGS_FILE, 'r') as file:
+            data = json.load(file)
+            settings.detect_swearing = data.get('detect_swearing', False)
+    except FileNotFoundError:
+        print("설정 파일이 없습니다. 새로운 설정 파일을 생성합니다.")
+
+# 설정 로드
+load_settings()
 
 
 def load_bot_info():
@@ -316,6 +360,15 @@ async def mamo_save1(interaction: discord.Interaction, memo_name, *, memo_conten
     else:
         await interaction.send("이미 같은 이름의 메모가 존재합니다.")
 
+
+@bot.hybrid_command(name='애니검색', description="Kitsu api로 애니를 검색 합니다.")
+async def anime(interaction: discord.Interaction, keyword: str):
+    embed = search_anime(keyword)
+    if embed:
+        await interaction.send(embed=embed)
+    else:
+        embed = discord.Embed(title="해당 애니를 찾을 수 없습니다.", color=0xFF2424)
+        await interaction.send(embed=embed)
 
 # 사용자별 보유 주식 정보를 저장하는 딕셔너리
 user_stocks = {}
@@ -778,16 +831,32 @@ async def member_stats(interaction: discord.Interaction):
     await interaction.send(embed=embed)
 
 
+@bot.hybrid_command(name='이모지', description="이모지를 크게 보기")
+async def emojis(interaction: discord.Interaction, *, emojsi: discord.Emoji=None):
+    for emoji in emojsi:
+        # 이모지 URL을 얻어옵니다.
+        emoji_url = f'https://cdn.discordapp.com/emojis/{emojsi.id}.png'
+        # 임베드에 이모지를 크게 표시합니다.
+        embed = discord.Embed(color=0xFFB2F5)
+        embed.set_image(url=emoji_url)
+        await interaction.send(embed=embed)
+        break  # 첫 번째 이모지만 사용합니다.
+
 @bot.hybrid_command(name='도움말', description="시이봇 메뉴얼")
 async def help(interaction: discord.Interaction):
     embed = discord.Embed(title="안녕하세요, 시이입니다!", description="귀여운 챗봇 하나쯤, 시이\n'시이야'라고 불러주세요!", color=0xFFB2F5)
     embed.set_thumbnail(url='https://cdn.litt.ly/images/d7qircjSN5w6FNgD5Oh57blUjrfbBmCj?s=1200x1200&m=outside&f=webp')
-    embed.add_field(name="**일반**", value="핑, 하트, 번역, 패치노트, 네이버검색, 유튜브검색, 블로그검색, 계산, 인원통계, 타이머, 프로필, 급식, 메모쓰기, 메모불러오기, 공지사항, 패치노트", inline=False)
-    embed.add_field(name="**재미**", value="고양이 ,알려주기, 급식, 호감도확인, 호감도도움말, 가위바위보, 광질, 주사위, 업다운시작, 업다운, 설날", inline=False)
-    embed.add_field(name="**주식**", value="주식매수, 주식매도, 가격보기, 자본")
+    embed.add_field(name="**일반**", value="핑, 하트, 번역, 패치노트, 계산, 인원통계, 타이머, 프로필, 급식, 메모쓰기, 메모불러오기, 공지사항, 패치노트", inline=False)
+    embed.add_field(name="**검색**", value="네이버검색, 유튜브검색, 블로그검색, 애니검색", inline=False)
+    embed.add_field(name="**재미**", value="고양이 ,알려주기, 급식, 호감도확인, 호감도도움말, 가위바위보, 광질, 주사위, 업다운시작, 업다운, 설날, 이모지", inline=False)
+    embed.add_field(name="**주식**", value="주식매수, 주식매도, 가격보기, 자본", inline=False)
     embed.add_field(name="**보이스**", value="음성채널입장, 음성채널퇴장", inline=False)
-    embed.add_field(name="**관리**", value="내정보, 프로필, 클리어, 임베드생성", inline=False)
-    embed.set_footer(text="버전: v2.15.7")
+    embed.add_field(name="**관리**", value="내정보, 프로필, 클리어, 임베드생성, 욕설필터링", inline=False)
+    embed.add_field(name="", value="", inline=False)
+    embed.add_field(name="시이가 궁금하다면", value="[시이 개발 서버](https://discord.gg/SNqd5JqCzU)")
+    embed.add_field(name="시이를 서버에 초대하고 싶다면", value="[시이 초대하기](https://discord.com/oauth2/authorize?client_id=1197084521644961913&scope=bot&permissions=0)")
+    embed.add_field(name="개발자를 응원할려면", value="[시이 하트 눌러주기](https://koreanbots.dev/bots//vote)")
+    embed.set_footer(text="버전: v2.16.7")
     await interaction.send(embed=embed)
 
 
@@ -799,13 +868,22 @@ async def hhlep(interaction: discord.Interaction):
     embed.add_field(name="호감도 상승법", value="/시이야, /알려주기 커멘드에서 각각 한번 실행 시킬떄 마다 1,2 씩 상승합니다.", inline=False)
     await interaction.send(embed=embed)
 
+@bot.hybrid_command(name='욕설필터링', description="욕설필터링기능을 끄고 킵니다.(관리자 권한 필요)")
+async def toggle_swearing_detection(interaction: discord.Interaction):
+    if interaction.author.guild_permissions.manage_messages:
+        settings.detect_swearing = not settings.detect_swearing
+        save_settings()
+        await interaction.send(f"욕설 감지 기능이 {'켜졌습니다' if settings.detect_swearing else '꺼졌습니다'}.")
+    else:
+        await interaction.send("관리자만 욕설 감지 설정을 변경할 수 있습니다.")
+
+
 
 @bot.hybrid_command(name="패치노트", description="시이봇 패치노트 보기")
 async def pt(interaction: discord.Interaction):
-    embed = discord.Embed(title="v2.15.7 패치노트", color=0xFFB2F5)
-    embed.add_field(name="신규기능", value="신규 커멘드 /고양이, /내정보 추가, /프로필 코드 수정, 접두사 ! 추가", inline=False)
-    embed.add_field(name="버그 수정", value="없음",
-                    inline=False)
+    embed = discord.Embed(title="v2.16.7 패치노트", color=0xFFB2F5)
+    embed.add_field(name="신규기능", value="신규 커멘드 /애니검색, /욕설필터링, 이모지 추가, /가르치기 비속어 검열 추가", inline=False)
+    embed.add_field(name="버그 수정", value="없음", inline=False)
     await interaction.send(embed=embed)
 
 
@@ -816,22 +894,20 @@ async def tell(interaction: discord.Interaction, keyword: str, *, description: s
     user_id = str(interaction.author.id)
     happiness_manager.increment_user_happiness(server_id, user_id, amount=2)
     happiness_manager.save_to_file()
-    for word in bad_words:
-        if word in keyword:
-            # 욕설이 감지되면 적절한 조치를 취하고 메시지를 삭제합니다.
-            await interaction.send(f"{interaction.author.mention} 나쁜말은 싫어요!")
-            break
-        elif word in description:
-            await interaction.send(f"{interaction.author.mention} 나쁜말은 싫어요!")
-            break
+    print(korcen.check(keyword))
+    if korcen.check(keyword) or korcen.check(description):
+        embed = discord.Embed(title="그런 단어는 배우기 싫어요..", description="", color=0xFF2424)
+        embed.set_footer(text="`© Korcen 을 사용하여 검열하였습니다.`")
+        await interaction.send(embed=embed)
+        return
     if keyword not in bot_info:
         bot_info[keyword] = {
             'description': description,
             'author_nickname': interaction.author.display_name
         }
-        await interaction.send(f"오케! ```{keyword}``` 라고 하면\n```{description}``` 라고 할게욧!")
+        await interaction.send(f"오케! `{keyword}` 라고 하면\n`{description}` 라고 할게욧!")
     else:
-        await interaction.send(f"```{keyword}```는 이미 알고 있다구욧!")
+        await interaction.send(f"`{keyword}`는 이미 알고 있다구욧!")
     # 정보 저장
     save_bot_info(bot_info)
 
@@ -873,13 +949,18 @@ async def check_happiness(interaction: discord.Interaction):
     embed.set_footer(text='{}'.format(get_time()))
     await interaction.send(embed=embed)
 
-bad_words = ['ㅆㅂ', '씨발', '좆', 'ㅈ까', 'ㅈㄹ', '지랄', '느금마', '니애미', '옘병']
 wordshii = ['넹!', '왜 그러세용?', '시이예용!', '필요 하신거 있으신가요?', '뭘 도와드릴까요?', '반가워용', '저 부르셨나요?', '왜요용', '잉', '...?', '네?']
+baddword = ['확마', '아놔', '뭐레', '이게', '나쁜말은 싫어요ㅠ']
+
 
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
         return
+    if bot.user.mentioned_in(message):
+        whyresponse = random.randint(0, 7)
+        response = wordshii[whyresponse]
+        await message.channel.send(response)
     if message.content.startswith('시이야'):
         if not message.content.startswith('시이야 '):
             wordss = random.randint(0, 10)
@@ -904,7 +985,7 @@ async def on_message(message):
                 '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
                 'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
                 '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
-                '패치버전': '패치버전 v2.15.7',
+                '패치버전': '패치버전 v2.16.7',
                 '과자': '음...과자하니까 과자 먹고 싶당',
                 '뭐해?': '음.....일하죠 일! 크흠',
                 '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
@@ -945,12 +1026,18 @@ async def on_message(message):
                 if info:
                     author_nickname = info['author_nickname']
                     description = info['description']
-                    response = f"{description}\n```{author_nickname}이(가) 알려줬어요!```"
+                    response = f"{description}\n`{author_nickname} 님이 알려주셨어요!`"
                     await message.channel.send(response)
                 else:
                     whyresponse = random.randint(0, 7)
                     response = why[whyresponse]
                     await message.channel.send(response)
+    else:
+        if settings.detect_swearing:
+            content_lower = message.content.lower()
+            if korcen.check(content_lower):
+                await message.delete()
+                await message.channel.send(f"{message.author.mention}, 욕설이 감지되었습니다!")
     await bot.process_commands(message)
 
 
