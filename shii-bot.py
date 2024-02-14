@@ -57,10 +57,36 @@ audio_file_path = "output.wav"
 mamo_file = 'mamo.json'
 lv_file = 'lv.json'
 SETTINGS_FILE = "bot_settings.json"
+count_FILE = 'count.json'
 start_time = datetime.now()
 settings = BotSettings()
 
-# 경험치와 레벨을 로드하는 함수
+
+
+async def load_datas():
+    try:
+        with open(count_FILE, 'r') as file:
+            data = json.load(file)
+            return data.get('command_count', 0)
+    except FileNotFoundError:
+        print("데이터 파일이 없습니다. 새로운 파일을 생성합니다.")
+        return 0
+
+
+async def save_data():
+    command_count = await load_datas()
+    data = {"command_count": command_count + 1}
+    with open(count_FILE, 'w') as file:
+        json.dump(data, file)
+
+# 명령어가 실행될 때마다 커맨드 카운트를 업데이트합니다.
+async def update_command_count():
+    command_count = await load_datas()
+    data = {"command_count": command_count + 1}
+    with open(count_FILE, 'w') as file:
+        json.dump(data, file)
+
+
 def load_experience():
     try:
         with open(lv_file, 'r') as file:
@@ -846,7 +872,7 @@ async def emojis(interaction: discord.Interaction, *, emojsi: discord.Emoji=None
 async def help(interaction: discord.Interaction):
     embed = discord.Embed(title="안녕하세요, 시이입니다!", description="귀여운 챗봇 하나쯤, 시이\n'시이야'라고 불러주세요!", color=0xFFB2F5)
     embed.set_thumbnail(url='https://cdn.litt.ly/images/d7qircjSN5w6FNgD5Oh57blUjrfbBmCj?s=1200x1200&m=outside&f=webp')
-    embed.add_field(name="**일반**", value="핑, 하트, 번역, 패치노트, 계산, 인원통계, 타이머, 프로필, 급식, 메모쓰기, 메모불러오기, 공지사항, 패치노트", inline=False)
+    embed.add_field(name="**일반**", value="핑, 하트, 번역, 패치노트, 계산, 인원통계, 타이머, 프로필, 급식, 메모쓰기, 메모불러오기, 공지사항, 패치노트, 카운트", inline=False)
     embed.add_field(name="**검색**", value="네이버검색, 유튜브검색, 블로그검색, 애니검색", inline=False)
     embed.add_field(name="**재미**", value="고양이 ,알려주기, 급식, 호감도확인, 호감도도움말, 가위바위보, 광질, 주사위, 업다운시작, 업다운, 설날, 이모지", inline=False)
     embed.add_field(name="**주식**", value="주식매수, 주식매도, 가격보기, 자본", inline=False)
@@ -854,9 +880,9 @@ async def help(interaction: discord.Interaction):
     embed.add_field(name="**관리**", value="내정보, 프로필, 클리어, 임베드생성, 욕설필터링", inline=False)
     embed.add_field(name="", value="", inline=False)
     embed.add_field(name="시이가 궁금하다면", value="[시이 개발 서버](https://discord.gg/SNqd5JqCzU)")
-    embed.add_field(name="시이를 서버에 초대하고 싶다면", value="[시이 초대하기](https://discord.com/oauth2/authorize?client_id=1197084521644961913&scope=bot&permissions=0)")
+    embed.add_field(name="시이를 서버에 초대하고 싶다면", value="[시이 초대하기](https://discord.com/oauth2/authorize?client_id=&scope=bot&permissions=0)")
     embed.add_field(name="개발자를 응원할려면", value="[시이 하트 눌러주기](https://koreanbots.dev/bots//vote)")
-    embed.set_footer(text="버전: v2.16.7")
+    embed.set_footer(text="버전: v2.16.8")
     await interaction.send(embed=embed)
 
 
@@ -881,10 +907,11 @@ async def toggle_swearing_detection(interaction: discord.Interaction):
 
 @bot.hybrid_command(name="패치노트", description="시이봇 패치노트 보기")
 async def pt(interaction: discord.Interaction):
-    embed = discord.Embed(title="v2.16.7 패치노트", color=0xFFB2F5)
-    embed.add_field(name="신규기능", value="신규 커멘드 /애니검색, /욕설필터링, 이모지 추가, /가르치기 비속어 검열 추가", inline=False)
+    embed = discord.Embed(title="v2.16.8 패치노트", color=0xFFB2F5)
+    embed.add_field(name="신규기능", value="오류 리포트 시스템 추가", inline=False)
     embed.add_field(name="버그 수정", value="없음", inline=False)
     await interaction.send(embed=embed)
+
 
 
 @bot.hybrid_command(name='가르치기', description='시이봇에게 많은걸 알려주세요!(베타)')
@@ -985,7 +1012,7 @@ async def on_message(message):
                 '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
                 'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
                 '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
-                '패치버전': '패치버전 v2.16.7',
+                '패치버전': '패치버전 v2.16.8',
                 '과자': '음...과자하니까 과자 먹고 싶당',
                 '뭐해?': '음.....일하죠 일! 크흠',
                 '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
@@ -1052,6 +1079,28 @@ def get_day_of_week():
 
 def get_time():
     return datetime.today().strftime("%H시 %M분 %S초")
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        return
+    embed = discord.Embed(title="오류가 발생하였습니다. 죄송합니다.", description="오류 로그를 개발자에게 전송 하실려면 이모지를 눌러주세요.", color=0xFF2424)
+    message5 = await ctx.send(embed=embed)
+    await message5.add_reaction("📩")
+    def check(reaction, user):
+        return str(reaction.emoji) == "📩"
+    try:
+        user, reaction = await bot.wait_for('reaction_add', timeout=30.0, check=check)
+    except asyncio.TimeoutError:
+        await ctx.send("오류로그를 보내지 않습니다.")
+    else:
+        if isinstance(error, commands.CommandError):
+            target_user_id = 
+            target_user = await bot.fetch_user(target_user_id)
+            await target_user.send(f'오류 발생: `{ctx.command}` - {error} - {format(get_time())}')
+    pass
+
 
 
 bot.run()
