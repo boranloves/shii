@@ -32,7 +32,7 @@
 시이야
 
 ## 패치버전
--v2.16.7                          
+-v2.16.8                          
 
 ## shii-bot 공식 사이트
 -https://litt.ly/studio_boran                           
