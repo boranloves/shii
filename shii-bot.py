@@ -13,8 +13,10 @@ import random
 import re
 from korcen import korcen
 
+
 start_times = time.time()
 why = ['으에?', '몰?루', '왜요용', '잉', '...?', '몰라여', '으에.. 그게 뭐징?', '네?']
+
 
 class Bot(commands.Bot):
     def __init__(self, intents: discord.Intents, **kwargs):
@@ -23,10 +25,9 @@ class Bot(commands.Bot):
     async def on_ready(self):
         print(f"Logged in as {self.user}")
         await self.change_presence(status=discord.Status.online,
-                                   activity=discord.Activity(type=discord.ActivityType.listening, name="류현준 난간"))
+                                   activity=discord.Activity(type=discord.ActivityType.listening, name="류현준 난간 "))
         await self.tree.sync()
-        kb = DiscordpyKoreanbots(self,
-                                 run_task=True)
+        kb = DiscordpyKoreanbots(self,run_task=True)
         ss = self.guilds
         print(ss)
         simulate_stock_market.start()
@@ -38,6 +39,25 @@ class Bot(commands.Bot):
 class BotSettings:
     def __init__(self):
         self.detect_swearing = False
+
+
+
+class PollView(discord.ui.View):
+    def __init__(self, poll_options):
+        super().__init__()
+        for option in poll_options:
+            button = discord.ui.Button(style=discord.ButtonStyle.gray, label=option)
+            button.callback = self._on_button
+            self.add_item(button)
+        self.poll_message = None
+
+    async def _on_button(self, interaction):
+        for item in self.children:
+            if isinstance(item, discord.ui.Button) and item.label == interaction.component.label:
+                await interaction.response.send_message(f"{interaction.user}님이 '{item.label}' 옵션을 선택했습니다.", ephemeral=True)
+                await self.poll_message.delete()
+                self.stop()
+                break
 
 
 json_file_path = 'bot_info.json'
@@ -60,7 +80,7 @@ SETTINGS_FILE = "bot_settings.json"
 count_FILE = 'count.json'
 start_time = datetime.now()
 settings = BotSettings()
-
+intents.message_content = True
 
 
 async def load_datas():
@@ -513,12 +533,6 @@ async def view_stocks(interaction: discord.Interaction):
         await interaction.send("보유한 주식이 없습니다.")
 
 
-@bot.hybrid_command(name="설날", description="새해복 많이 받으세요!")
-async def newyear(interaction: discord.Interaction):
-    await interaction.send(f"{interaction.author.mention}! 새해복 많이 받으세요!")
-    await asyncio.sleep(3)
-    await interaction.send('그니까 용돈 주세요')
-
 
 @bot.hybrid_command(name='업다운시작', description="업다운 개임!(베타)")
 async def start_game(interaction: discord.Interaction):
@@ -749,10 +763,10 @@ async def hert(interaction: discord.Interaction):
 
 @bot.hybrid_command(name='공지사항', description="시이봇의 공지를 볼 수 있어요!")
 async def announcement(interaction: discord.Interaction):
-    embed = discord.Embed(title="시이봇 공지 사항", description="2024.02.11일 공지", color=0xFFB2F5)
+    embed = discord.Embed(title="시이봇 공지 사항", description="2024.02.15일 공지", color=0xFFB2F5)
     embed.add_field(name="시이봇 개발 안내", value="시이봇 점검(개발) 기간은 매일 약 오후2시 부터 오후 6시 입니다. 이때는 시이봇이 멈출수도 있으니 양해 부탁드립니다.",
                     inline=False)
-    embed.add_field(name="시이봇 공식 사이트 개발 공지", value="이번에 shii.me 도매인을 얻었습니다. 그래서 현재 사이트 개발중 이니 많은관심 부탁드립니다!",
+    embed.add_field(name="/번역 관련 공지 (중요)", value="현제, /번역 커멘드는 네이버의 파파고 openapi 를 사용하여 개발하였습니다. 그러나 파파고 번역 api가 2월 29일자로 서비스가 종료되어, 2월 29일자 이후로는 /번역이 사용이 불가하여, 2월 28일자로 /번역 서비스를 종료함을 알려드립니다. 죄송합니다.",
                     inline=False)
     await interaction.send(embed=embed)
 
@@ -874,15 +888,15 @@ async def help(interaction: discord.Interaction):
     embed.set_thumbnail(url='https://cdn.litt.ly/images/d7qircjSN5w6FNgD5Oh57blUjrfbBmCj?s=1200x1200&m=outside&f=webp')
     embed.add_field(name="**일반**", value="핑, 하트, 번역, 패치노트, 계산, 인원통계, 타이머, 프로필, 급식, 메모쓰기, 메모불러오기, 공지사항, 패치노트, 카운트", inline=False)
     embed.add_field(name="**검색**", value="네이버검색, 유튜브검색, 블로그검색, 애니검색", inline=False)
-    embed.add_field(name="**재미**", value="고양이 ,알려주기, 급식, 호감도확인, 호감도도움말, 가위바위보, 광질, 주사위, 업다운시작, 업다운, 설날, 이모지", inline=False)
+    embed.add_field(name="**재미**", value="고양이 ,알려주기, 급식, 호감도확인, 호감도도움말, 가위바위보, 광질, 주사위, 업다운시작, 업다운, 이모지, 골라", inline=False)
     embed.add_field(name="**주식**", value="주식매수, 주식매도, 가격보기, 자본", inline=False)
     embed.add_field(name="**보이스**", value="음성채널입장, 음성채널퇴장", inline=False)
     embed.add_field(name="**관리**", value="내정보, 프로필, 클리어, 임베드생성, 욕설필터링", inline=False)
     embed.add_field(name="", value="", inline=False)
     embed.add_field(name="시이가 궁금하다면", value="[시이 개발 서버](https://discord.gg/SNqd5JqCzU)")
-    embed.add_field(name="시이를 서버에 초대하고 싶다면", value="[시이 초대하기](https://discord.com/oauth2/authorize?client_id=&scope=bot&permissions=0)")
+    embed.add_field(name="시이를 서버에 초대하고 싶다면", value="[시이 초대하기](https://discord.com/oauth2/authorize?client_id=1197084521644961913&scope=bot&permissions=0)")
     embed.add_field(name="개발자를 응원할려면", value="[시이 하트 눌러주기](https://koreanbots.dev/bots//vote)")
-    embed.set_footer(text="버전: v2.16.8")
+    embed.set_footer(text="버전: v2.16.9")
     await interaction.send(embed=embed)
 
 
@@ -894,6 +908,7 @@ async def hhlep(interaction: discord.Interaction):
     embed.add_field(name="호감도 상승법", value="/시이야, /알려주기 커멘드에서 각각 한번 실행 시킬떄 마다 1,2 씩 상승합니다.", inline=False)
     await interaction.send(embed=embed)
 
+
 @bot.hybrid_command(name='욕설필터링', description="욕설필터링기능을 끄고 킵니다.(관리자 권한 필요)")
 async def toggle_swearing_detection(interaction: discord.Interaction):
     if interaction.author.guild_permissions.manage_messages:
@@ -904,11 +919,18 @@ async def toggle_swearing_detection(interaction: discord.Interaction):
         await interaction.send("관리자만 욕설 감지 설정을 변경할 수 있습니다.")
 
 
+@bot.hybrid_command(name="골라", description="시이가 골라줍니다")
+async def ox(interaction: discord.Interaction, cho: str):
+    words = cho.split()
+    selected_word = random.choice(words)  # 단어 리스트에서 랜덤으로 선택
+    await interaction.send(f"저는 {selected_word} 요!")
+
+
 
 @bot.hybrid_command(name="패치노트", description="시이봇 패치노트 보기")
 async def pt(interaction: discord.Interaction):
-    embed = discord.Embed(title="v2.16.8 패치노트", color=0xFFB2F5)
-    embed.add_field(name="신규기능", value="오류 리포트 시스템 추가", inline=False)
+    embed = discord.Embed(title="v2.16.9 패치노트", color=0xFFB2F5)
+    embed.add_field(name="신규기능", value="오류 리포트 시스템 삭제 및 /설날 삭제, 신규 커멘드 /골라 추가", inline=False)
     embed.add_field(name="버그 수정", value="없음", inline=False)
     await interaction.send(embed=embed)
 
@@ -1001,8 +1023,13 @@ async def on_message(message):
             happiness_manager.increment_user_happiness(server_id, user_id, amount=1)
             happiness_manager.save_to_file()
             info = bot_info.get(message1)
+            total_member_count = 0
+            for guild in bot.guilds:
+                if guild.name != "한국 디스코드 리스트":
+                    total_member_count += guild.member_count
             word = {
                 f'{message.author.display_name}': f"저가 {message.author.display_name} 님을 모를리 없죠!",
+                '정보': f'지금 시이는 `{len(bot.guilds)}` 개의 서버에서 `{total_member_count}명` 분들을 위해 일하고 있어요!',
                 'hello': '안녕하세욧!',
                 '안녕': '안녕하세요. 시이입니다!',
                 '누구야': '안녕하세요. shii입니다!',
@@ -1012,7 +1039,7 @@ async def on_message(message):
                 '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
                 'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
                 '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
-                '패치버전': '패치버전 v2.16.8',
+                '패치버전': '패치버전 v2.16.9',
                 '과자': '음...과자하니까 과자 먹고 싶당',
                 '뭐해?': '음.....일하죠 일! 크흠',
                 '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
@@ -1079,28 +1106,6 @@ def get_day_of_week():
 
 def get_time():
     return datetime.today().strftime("%H시 %M분 %S초")
-
-
-@bot.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.CommandNotFound):
-        return
-    embed = discord.Embed(title="오류가 발생하였습니다. 죄송합니다.", description="오류 로그를 개발자에게 전송 하실려면 이모지를 눌러주세요.", color=0xFF2424)
-    message5 = await ctx.send(embed=embed)
-    await message5.add_reaction("📩")
-    def check(reaction, user):
-        return str(reaction.emoji) == "📩"
-    try:
-        user, reaction = await bot.wait_for('reaction_add', timeout=30.0, check=check)
-    except asyncio.TimeoutError:
-        await ctx.send("오류로그를 보내지 않습니다.")
-    else:
-        if isinstance(error, commands.CommandError):
-            target_user_id = 
-            target_user = await bot.fetch_user(target_user_id)
-            await target_user.send(f'오류 발생: `{ctx.command}` - {error} - {format(get_time())}')
-    pass
-
 
 
 bot.run()
