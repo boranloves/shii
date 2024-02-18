@@ -20,14 +20,15 @@ why = ['으에?', '몰?루', '왜요용', '잉', '...?', '몰라여', '으에.. 
 
 class Bot(commands.Bot):
     def __init__(self, intents: discord.Intents, **kwargs):
-        super().__init__(command_prefix=["/", "!", "시이 "], intents=intents, case_insensitive=True)
+        super().__init__(command_prefix=["/", "!", "시이 "], intents=intents.all(), case_insensitive=True, sync_command=True)
 
     async def on_ready(self):
         print(f"Logged in as {self.user}")
         await self.change_presence(status=discord.Status.online,
                                    activity=discord.Activity(type=discord.ActivityType.listening, name="류현준 난간 "))
         await self.tree.sync()
-        kb = DiscordpyKoreanbots(self,run_task=True)
+        kb = DiscordpyKoreanbots(self,
+                                 run_task=True)
         ss = self.guilds
         print(ss)
         simulate_stock_market.start()
@@ -39,25 +40,6 @@ class Bot(commands.Bot):
 class BotSettings:
     def __init__(self):
         self.detect_swearing = False
-
-
-
-class PollView(discord.ui.View):
-    def __init__(self, poll_options):
-        super().__init__()
-        for option in poll_options:
-            button = discord.ui.Button(style=discord.ButtonStyle.gray, label=option)
-            button.callback = self._on_button
-            self.add_item(button)
-        self.poll_message = None
-
-    async def _on_button(self, interaction):
-        for item in self.children:
-            if isinstance(item, discord.ui.Button) and item.label == interaction.component.label:
-                await interaction.response.send_message(f"{interaction.user}님이 '{item.label}' 옵션을 선택했습니다.", ephemeral=True)
-                await self.poll_message.delete()
-                self.stop()
-                break
 
 
 json_file_path = 'bot_info.json'
@@ -215,24 +197,6 @@ class Happiness:
                 self.users = json.load(file)
 
 
-class UpDownGame:
-    def __init__(self):
-        self.answer = random.randint(1, 10000)
-        self.attempts = 0
-
-    def check_guess(self, guess):
-        self.attempts += 1
-        if guess == self.answer:
-            return True, f'정답입니다! {self.attempts}번만에 맞추셨습니다!!'
-        elif guess < self.answer:
-            return False, f':arrow_up: {guess} 보다 업!'
-        else:
-            return False, f':arrow_down: {guess} 보다 다운!'
-
-
-# 업다운 게임 인스턴스 생성
-game = UpDownGame()
-
 def save_settings():
     with open(SETTINGS_FILE, 'w') as file:
         json.dump(settings.__dict__, file)
@@ -389,32 +353,32 @@ def load_memos():
 # 메모를 확인하는 명령어
 @bot.hybrid_command(name='메모불러오기', description="쓴 메모를 불러옵니다.")
 async def mamo(interaction: discord.Interaction, memo_name):
-    user_id = str(interaction.author.id)
+    user_id = str(interaction.message.author.id)
     memos = load_memos()
     if user_id not in memos or memo_name not in memos[user_id]:
-        await interaction.send("해당 메모를 찾을 수 없습니다.")
+        await interaction.message.channel.send("해당 메모를 찾을 수 없습니다.")
     else:
         embed = discord.Embed(title=f"{memo_name}", description=f"{memos[user_id][memo_name]}", color=0xFFB2F5)
-        await interaction.send(embed=embed)
+        await interaction.message.channel.send(embed=embed)
 
 
 @bot.hybrid_command(name='메모쓰기', description="새 메모를 씁니다.")
 async def mamo_save1(interaction: discord.Interaction, memo_name, *, memo_content):
-    user_id = str(interaction.author.id)
+    user_id = str(interaction.message.author.id)
     if save_memo(user_id, memo_name, memo_content):
-        await interaction.send("메모가 저장되었습니다.")
+        await interaction.message.channel.send("메모가 저장되었습니다.")
     else:
-        await interaction.send("이미 같은 이름의 메모가 존재합니다.")
+        await interaction.message.channel.send("이미 같은 이름의 메모가 존재합니다.")
 
 
 @bot.hybrid_command(name='애니검색', description="Kitsu api로 애니를 검색 합니다.")
 async def anime(interaction: discord.Interaction, keyword: str):
     embed = search_anime(keyword)
     if embed:
-        await interaction.send(embed=embed)
+        await interaction.message.channel.send(embed=embed)
     else:
         embed = discord.Embed(title="해당 애니를 찾을 수 없습니다.", color=0xFF2424)
-        await interaction.send(embed=embed)
+        await interaction.message.channel.send(embed=embed)
 
 # 사용자별 보유 주식 정보를 저장하는 딕셔너리
 user_stocks = {}
@@ -439,13 +403,13 @@ async def check_stock_price(interaction: discord.Interaction):
     embed = discord.Embed(title="주식 가격", color=0x00ff00)
     for stock, price in stocks.items():
         embed.add_field(name=f"{stock.upper()} 가격", value=f"${price}", inline=False)
-    await interaction.send(embed=embed)
+    await interaction.message.channel.send(embed=embed)
 
 # 주식 구매 명령어
 @bot.hybrid_command(name='주식매수', description="주식매수")
 async def buy_stock(interaction: discord.Interaction, stock: str, quantity: int):
     server_id = str(interaction.guild.id)
-    user_id = str(interaction.author.id)
+    user_id = str(interaction.message.author.id)
     if stock.upper() in stocks:
         cost = stocks[stock.upper()] * quantity
         capital = load_capital()
@@ -454,7 +418,7 @@ async def buy_stock(interaction: discord.Interaction, stock: str, quantity: int)
         if user_id not in capital[server_id]:
             capital[server_id][user_id] = 0
         if cost <= 0:
-            await interaction.send('0개 이하의 주식을 구매할 수 없습니다.')
+            await interaction.message.channel.send('0개 이하의 주식을 구매할 수 없습니다.')
         elif cost <= capital[server_id][user_id]:
             if cost <= 1000000:  # 가상 자본 제한 (100만 달러)
                 if server_id not in user_stocks:
@@ -465,109 +429,79 @@ async def buy_stock(interaction: discord.Interaction, stock: str, quantity: int)
                     user_stocks[server_id][user_id][stock.upper()] = 0
                 user_stocks[server_id][user_id][stock.upper()] += quantity
                 capital[server_id][user_id] -= cost
-                await interaction.send(f'{stock.upper()}를 ${cost}에 {quantity}주 구매했습니다.')
+                await interaction.message.channel.send(f'{stock.upper()}를 ${cost}에 {quantity}주 구매했습니다.')
             else:
-                await interaction.send('자본 한도를 초과하여 더 이상 주식을 구매할 수 없습니다.')
+                await interaction.message.channel.send('자본 한도를 초과하여 더 이상 주식을 구매할 수 없습니다.')
         else:
-            await interaction.send('자금이 부족하여 주식을 구매할 수 없습니다.')
+            await interaction.message.channel.send('자금이 부족하여 주식을 구매할 수 없습니다.')
         save_capital(capital)
         save_stocks(user_stocks)
     else:
-        await interaction.send(f'{stock.upper()}은(는) 유효한 주식 기호가 아닙니다.')
+        await interaction.message.channel.send(f'{stock.upper()}은(는) 유효한 주식 기호가 아닙니다.')
 
 # 주식 판매 명령어
 @bot.hybrid_command(name='주식매도', description="주식팔기")
 async def sell_stock(interaction: discord.Interaction, stock: str, quantity: int):
     server_id = str(interaction.guild.id)
-    user_id = str(interaction.author.id)
+    user_id = str(interaction.message.author.id)
     if stock.upper() in stocks:
         capital = load_capital()
         if server_id not in capital or user_id not in capital[server_id]:
-            await interaction.send('판매할 주식이 없습니다.')
+            await interaction.message.channel.send('판매할 주식이 없습니다.')
         elif stock.upper() not in user_stocks.get(server_id, {}).get(user_id, {}):
-            await interaction.send(f'{stock.upper()}의 주식을 소유하고 있지 않습니다.')
+            await interaction.message.channel.send(f'{stock.upper()}의 주식을 소유하고 있지 않습니다.')
         elif user_stocks[server_id][user_id][stock.upper()] >= quantity:
             user_stocks[server_id][user_id][stock.upper()] -= quantity
             earnings = stocks[stock.upper()] * quantity
             capital[server_id][user_id] += earnings
-            await interaction.send(f'{stock.upper()}를 ${earnings}에 {quantity}주 판매했습니다.')
+            await interaction.message.channel.send(f'{stock.upper()}를 ${earnings}에 {quantity}주 판매했습니다.')
             save_capital(capital)
             save_stocks(user_stocks)
         else:
-            await interaction.send('판매할 주식이 충분하지 않습니다.')
+            await interaction.message.channel.send('판매할 주식이 충분하지 않습니다.')
     else:
-        await interaction.send(f'{stock.upper()}은(는) 유효한 주식 기호가 아닙니다.')
+        await interaction.message.channel.send(f'{stock.upper()}은(는) 유효한 주식 기호가 아닙니다.')
 
 # 개인 자본 확인 명령어
 @bot.hybrid_command(name='자본', description="자본보기")
 async def check_balance(interaction: discord.Interaction):
     server_id = str(interaction.guild.id)
-    user_id = str(interaction.author.id)
+    user_id = str(interaction.message.author.mention)
     capital = load_capital()
     if server_id in capital and user_id in capital[server_id]:
-        await interaction.send(f'{interaction.author.mention}님의 현재 자본은 ${capital[server_id][user_id]} 입니다.')
+        await interaction.message.channel.send(f'{interaction.message.author.mention}님의 현재 자본은 ${capital[server_id][user_id]} 입니다.')
     else:
         if server_id not in capital:
             capital[server_id] = {}
         capital[server_id][user_id] = 500  # 초기 자본 설정
         save_capital(capital)
-        await interaction.send(f'{interaction.author.mention}님, 초기 자본 $500을 지급하였습니다.')
+        await interaction.message.channel.send(f'{interaction.message.author.mention}님, 초기 자본 $500을 지급하였습니다.')
 
 # 보유 주식 확인 명령어
 @bot.hybrid_command(name='주식보기', description="보유한 주식 조회")
 async def view_stocks(interaction: discord.Interaction):
     server_id = str(interaction.guild.id)
-    user_id = str(interaction.author.id)
+    user_id = str(interaction.message.author.id)
     user_stocks = load_stocks()  # 사용자별 보유 주식 정보를 로드합니다.
 
     if server_id in user_stocks and user_id in user_stocks[server_id]:
         user_stock_info = user_stocks[server_id][user_id]
         if user_stock_info:
-            embed = discord.Embed(title=f"{interaction.author.display_name}님의 보유 주식", color=0x00ff00)
+            embed = discord.Embed(title=f"{interaction.message.author.display_name}님의 보유 주식", color=0x00ff00)
             for stock, quantity in user_stock_info.items():
                 embed.add_field(name=f"{stock.upper()}", value=f"수량: {quantity}", inline=False)
-            await interaction.send(embed=embed)
+            await interaction.message.channel.send(embed=embed)
         else:
-            await interaction.send("보유한 주식이 없습니다.")
+            await interaction.message.channel.send("보유한 주식이 없습니다.")
     else:
-        await interaction.send("보유한 주식이 없습니다.")
+        await interaction.message.channel.send("보유한 주식이 없습니다.")
 
-
-
-@bot.hybrid_command(name='업다운시작', description="업다운 개임!(베타)")
-async def start_game(interaction: discord.Interaction):
-    global game
-    game = UpDownGame()
-    await interaction.send('새로운 게임을 시작합니다! 범위는 1에서 10000!')
-
-
-@bot.hybrid_command(name='업다운', description="업다운게임 맟추기")
-async def guess_number(interaction: discord.Interaction, number: int):
-    global game
-    if game is None:
-        await interaction.send('게임을 먼저 시작해주세요.')
-        return
-    result, hint = game.check_guess(number)
-    await interaction.send(hint)
-    if result:
-        game = None
-
-
-
-@bot.hybrid_command(name='업다운종료', description="업다운게임 종료하기")
-async def end_game(interaction: discord.Interaction):
-    global game
-    if game is None:
-        await interaction.send('현재 진행 중인 게임이 없습니다.')
-    else:
-        game = None
-        await interaction.send('업다운 게임이 종료되었습니다.')
 
 
 @bot.hybrid_command(name="고양이", description="랜덤으로 고양이 사진을 불러옵니다")
 async def cat(interaction: discord.Interaction):
     cat_image_url = get_random_cat()
-    await interaction.send(cat_image_url)
+    await interaction.message.channel.send(cat_image_url)
 
 
 def get_random_cat():
@@ -594,9 +528,9 @@ async def school_lunch(interaction: discord.Interaction, school_name: str):
                 embed.add_field(name=f"{date}", value=lunch_menu)
             else:
                 embed.add_field(name=f"{date}", value="해당 날짜의 급식 정보를 찾을 수 없습니다.")
-        await interaction.send(embed=embed)
+        await interaction.message.channel.send(embed=embed)
     else:
-        await interaction.send(f"{school_name} 를 찾을 수 없습니다.")
+        await interaction.message.channel.send(f"{school_name} 를 찾을 수 없습니다.")
 
 
 @bot.hybrid_command(name='번역', description="source_lang: 원본 언어 target_lang: 번역할 언어 네이버 open api를 통한 번역(베타)")
@@ -604,7 +538,7 @@ async def translate(interaction: discord.Interaction, source_lang, target_lang, 
     translation = papago_translate(text, source_lang, target_lang)
     embed = discord.Embed(title='번역 완료!', description="", color=0xFFB2F5)
     embed.add_field(name=translation, value=f"{source_lang}에서 {target_lang}로 번역", inline=False)
-    await interaction.send(embed=embed)
+    await interaction.message.channel.send(embed=embed)
 
 
 @bot.hybrid_command(name='카카오검색', description="카카오를 통한 검색(베타)")
@@ -630,16 +564,16 @@ async def search_kakao(interaction: discord.Interaction, *, text: str):
         html_text = f'{result["title"]}'
         plain_text = remove_html_tags(html_text)
         embed.add_field(name=plain_text, value=f'URL: {result["url"]}', inline=False)
-        await interaction.send(embed=embed)
+        await interaction.message.channel.send(embed=embed)
 
     except requests.exceptions.HTTPError as e:
-        await interaction.send(f'HTTP 오류: {e.response.status_code} - {e.response.text}')
+        await interaction.message.channel.send(f'HTTP 오류: {e.response.status_code} - {e.response.text}')
 
     except (IndexError, KeyError):
-        await interaction.send(f'검색 결과를 찾을 수 없습니다. 더 정확한 검색어를 입력하세요.')
+        await interaction.message.channel.send(f'검색 결과를 찾을 수 없습니다. 더 정확한 검색어를 입력하세요.')
 
     except requests.exceptions.RequestException as e:
-        await interaction.send(f'오류 발생: {e}')
+        await interaction.message.channel.send(f'오류 발생: {e}')
 
 
 @bot.hybrid_command(name='블로그검색', description="네이버 open api를 통한 검색(베타)")
@@ -649,7 +583,7 @@ async def search(interaction: discord.Interaction, *, query):
     plain_text = remove_html_tags(html_text)
     embed = discord.Embed(title=f"검색어: {query}", description=plain_text, color=0x86E57F)
     embed.set_footer(text=link)
-    await interaction.send(embed=embed)
+    await interaction.message.channel.send(embed=embed)
 
 
 @bot.hybrid_command(name='유튜브검색', description="유튜브 검색(베타)")
@@ -659,9 +593,9 @@ async def youtube_search(interaction: discord.Interaction, *, query: str):
     if results:
         video_title = results[0]['title']
         video_url = f"https://www.youtube.com/watch?v={results[0]['id']}"
-        await interaction.send(f'검색 결과: {video_title}\n링크: {video_url}')
+        await interaction.message.channel.send(f'검색 결과: {video_title}\n링크: {video_url}')
     else:
-        await interaction.send('검색 결과를 찾을 수 없습니다.')
+        await interaction.message.channel.send('검색 결과를 찾을 수 없습니다.')
 
 
 
@@ -676,9 +610,9 @@ async def calculate_expression(ctx, *, expression):
 
 @bot.hybrid_command(name='클리어', description="메시지 청소")
 async def clear(interaction: discord.Interaction, amount: int):
-    sent_message1 = await interaction.send("잠시 기다려 주세요")
+    sent_message1 = await interaction.message.channel.send("잠시 기다려 주세요")
     if not interaction.guild:
-        sent_message2 = await interaction.send("DM에서는 사용이 불가능한 명령어입니다!")
+        sent_message2 = await interaction.message.channel.send("DM에서는 사용이 불가능한 명령어입니다!")
         await asyncio.sleep(3)
         await sent_message1.delete()
         await sent_message2.delete()
@@ -694,35 +628,36 @@ async def clear(interaction: discord.Interaction, amount: int):
 
 @bot.hybrid_command(name='음성채널입장', description="음성 채널 입장(베타)")
 async def start1(interaction: discord.Interaction):
-    if interaction.author.voice and interaction.author.voice.channel:
-        channel = interaction.author.voice.channel
-        await interaction.send(f"봇이 {channel} 채널에 입장합니다.")
+    if interaction.message.author.voice and interaction.message.author.voice.channel:
+        channel = interaction.message.author.voice.channel
+        await interaction.message.channel.send(f"봇이 {channel} 채널에 입장합니다.")
         await channel.connect()
-        print(f"음성 채널 정보: {interaction.author.voice}")
-        print(f"음성 채널 이름: {interaction.author.voice.channel}")
+        print(f"음성 채널 정보: {interaction.message.author.voice}")
+        print(f"음성 채널 이름: {interaction.message.author.voice.channel}")
     else:
-        await interaction.send("음성 채널에 유저가 존재하지 않습니다. 1명 이상 입장해 주세요.")
+        await interaction.message.channel.send("음성 채널에 유저가 존재하지 않습니다. 1명 이상 입장해 주세요.")
 
 
 @bot.hybrid_command(name='임베드생성', description="임베드생성기")
 async def send_server_announcement1(interaction: discord.Interaction, text: str, text1: str, text2: str, text3: str):
     embed = discord.Embed(title=text, description=text1, color=0xFFB2F5)
     embed.add_field(name=text2, value=text3, inline=False)
-    await interaction.send(embed=embed)
+    await interaction.message.channel.send(embed=embed)
 
 
 @bot.hybrid_command(name='음성채널퇴장', description="음성 채널 퇴장(베타)")
 async def stop1(interaction: discord.Interaction):
     try:
         # 음성 채널에서 봇을 내보냅니다.
-        await interaction.voice_client.disconnect()
-        await interaction.send(f"봇을 {interaction.author.voice.channel} 에서 내보냈습니다.")
+        await interaction.message.voice_client.disconnect()
+        await interaction.message.channel.send(f"봇을 {interaction.message.author.voice.channel} 에서 내보냈습니다.")
     except IndexError as error_message:
         print(f"에러 발생: {error_message}")
-        await interaction.send(f"{interaction.author.voice.channel}에 유저가 존재하지 않거나 봇이 존재하지 않습니다.\\n다시 입장후 퇴장시켜주세요.")
+        await interaction.message.channel.send(f"{interaction.message.author.voice.channel}에 유저가 존재하지 않거나 봇이 존재하지 "
+                                               f"않습니다.\\n다시 입장후 퇴장시켜주세요.")
     except AttributeError as not_found_channel:
         print(f"에러 발생: {not_found_channel}")
-        await interaction.send("봇이 존재하는 채널을 찾는 데 실패했습니다.")
+        await interaction.message.channel.send("봇이 존재하는 채널을 찾는 데 실패했습니다.")
 
 
 @bot.hybrid_command(name='가위바위보', description="가위바위보!")
@@ -731,34 +666,15 @@ async def game(interaction: discord.Interaction, user: str):  # user:str로 !gam
     bot = random.choice(rps_table)
     result = rps_table.index(user) - rps_table.index(bot)  # 인덱스 비교로 결과 결정
     if result == 0:
-        await interaction.send(f'{user} vs {bot}  비겼당.')
+        await interaction.message.channel.send(f'{user} vs {bot}  비겼당.')
         print(f'{user} vs {bot}  비겼당.')
     elif result == 1 or result == -2:
-        await interaction.send(f'{user} vs {bot}  졌당.')
+        await interaction.message.channel.send(f'{user} vs {bot}  졌당.')
         print(f'{user} vs {bot}  졌당.')
     else:
-        await interaction.send(f'{user} vs {bot}  내가 이겼당~.')
+        await interaction.message.channel.send(f'{user} vs {bot}  내가 이겼당~.')
         print(f'{user} vs {bot}  내가 이겼당~.')
 
-
-@bot.hybrid_command(name='하트', description="시이봇 하트투표 확인(구걸 맞음 ㅇㅇ ~개발자왈~)")
-async def hert(interaction: discord.Interaction):
-    headers = {
-        'Authorization': 
-        'Content-Type': 'application/json'
-    }
-    params = interaction.author.id
-    response = requests.get(f'https://koreanbots.dev/api/v2/bots//vote?userID={params}',
-                            headers=headers)
-    print(f'https://koreanbots.dev/api/v2/bots//vote?userID={params}')
-    print(response.status_code)
-    if response.status_code == 200:
-        await interaction.send("투표해 주셔서 감사합니다!!! (호감도 상승 코드 추가 예정..)")
-    elif 400 <= response.status_code >= 500:
-        await interaction.send(f'버그가 발생하였습니다. 코드: {response.status_code}')
-    else:
-        await interaction.send(f"하트 하나만 주세요ㅠ")
-        await interaction.send("https://koreanbots.dev/bots/")
 
 
 @bot.hybrid_command(name='공지사항', description="시이봇의 공지를 볼 수 있어요!")
@@ -768,7 +684,7 @@ async def announcement(interaction: discord.Interaction):
                     inline=False)
     embed.add_field(name="/번역 관련 공지 (중요)", value="현제, /번역 커멘드는 네이버의 파파고 openapi 를 사용하여 개발하였습니다. 그러나 파파고 번역 api가 2월 29일자로 서비스가 종료되어, 2월 29일자 이후로는 /번역이 사용이 불가하여, 2월 28일자로 /번역 서비스를 종료함을 알려드립니다. 죄송합니다.",
                     inline=False)
-    await interaction.send(embed=embed)
+    await interaction.message.channel.send(embed=embed)
 
 
 def get_timestamp():
@@ -780,7 +696,7 @@ async def ping(interaction: discord.Interaction):
     message_latency = round(bot.latency * 1000, 2)
 
     start_time = interaction.message.created_at
-    message5 = await interaction.send("메시지 핑 측정중...")
+    message5 = await interaction.message.channel.send("메시지 핑 측정중...")
     end_time = message5.created_at
     await message5.delete()
     latency = (end_time - start_time).total_seconds() * 1000
@@ -790,13 +706,13 @@ async def ping(interaction: discord.Interaction):
     uptime_minutes = uptime_seconds // 60
 
     embed = discord.Embed(title="퐁!", color=0xFFB2F5)
-    embed.add_field(name=f'REST ping', value=f"```{latency}ms```")
-    embed.add_field(name=f'Gateway ping', value=f"```{message_latency}ms```")
-    embed.add_field(name=f'업타임', value=f"```{uptime_minutes}분```")
+    embed.add_field(name=f'REST ping', value=f"`{latency}ms`")
+    embed.add_field(name=f'Gateway ping', value=f"`{message_latency}ms`")
+    embed.add_field(name=f'업타임', value=f"`{uptime_minutes}분`")
     list_length = len(bot.guilds)
-    embed.add_field(name="서버수", value=f"```{list_length}```")
+    embed.add_field(name="서버수", value=f"`{list_length}`")
     embed.set_footer(text='{}'.format(get_timestamp()))
-    await interaction.send(embed=embed)
+    await interaction.message.channel.send(embed=embed)
 
 
 @bot.hybrid_command(name='광질', description="광질을 하자")
@@ -804,14 +720,14 @@ async def mining(interaction: discord.Interaction):
     minerals = ['다이아몬드', '루비', '에메랄드', '자수정', '철', '석탄']
     weights = [1, 3, 6, 15, 25, 50]
     results = random.choices(minerals, weights=weights, k=3)
-    await interaction.send(', '.join(results) + ' 광물들을 획득하였습니다.')
+    await interaction.message.channel.send(', '.join(results) + ' 광물들을 획득하였습니다.')
     print(', '.join(results) + ' 광물들을 획득하였습니다.')
 
 
 @bot.hybrid_command(name='주사위', description="주사위 굴리기")
 async def roll(interaction: discord.Interaction):
     randnum = random.randint(1, 6)  # 1이상 6이하 랜덤 숫자를 뽑음
-    await interaction.send(f'주사위 결과는 {randnum} 입니다.')
+    await interaction.message.channel.send(f'주사위 결과는 {randnum} 입니다.')
     print(f'주사위 결과는 {randnum} 입니다.')
 
 
@@ -822,39 +738,45 @@ async def dp(interaction: discord.Interaction, member: discord.Member = None):
         member = interaction.user
     embed = discord.Embed(color=0xFFB2F5)
     embed.set_image(url=member.avatar)
-    await interaction.send(embed=embed)
+    await interaction.message.channel.send(embed=embed)
 
 
 @bot.hybrid_command(name="내정보", description='내 정보를 봅니다')
 async def propill(interaction: discord.Interaction):
-    member = interaction.author
+    member = interaction.message.author
     roles = member.roles
     role_names = [role.name for role in roles]
     server_id = str(interaction.guild.id)
-    user_id = str(interaction.author.id)
-    user_name = str(interaction.author.display_name)
+    user_id = str(interaction.message.author.id)
+    user_name = str(interaction.message.author.display_name)
     current_happiness = happiness_manager.get_user_happiness(server_id, user_id)
     server_id = str(interaction.guild.id)
-    user_id = str(interaction.author.id)
+    user_id = str(interaction.message.author.id)
     capital = load_capital()
     embed = discord.Embed(title=f"{user_name} 님의 정보", color=0xFFB2F5)
     if not member:
         member = interaction.user
     embed.set_thumbnail(url=member.avatar)
     embed.add_field(name="호감도", value=f":heart: {current_happiness}")
+    embed.add_field(name="역할", value=f"`{role_names}`")
     if server_id in capital and user_id in capital[server_id]:
         embed.add_field(name="자본", value=f"${capital[server_id][user_id]}")
     else:
         embed.add_field(name="자본", value="아직 주식을 시작하지 않았습니다.")
 
-    await interaction.send(embed=embed)
+    await interaction.message.channel.send(embed=embed)
 
 
 @bot.hybrid_command(name='타이머', description="타이머 실행(베타)")
 async def set_time(interaction: discord.Interaction, seconds: int, message='타이머 종료!'):
-    await interaction.send(f'{seconds}초 후에 알림이 옵니다.')
+    await interaction.message.channel.send(f'{seconds}초 후에 알림이 옵니다.')
     await asyncio.sleep(seconds)
-    await interaction.send(message)
+    await interaction.message.channel.send(message)
+
+
+@bot.hybrid_command(name='카피', description="시이가 따라 말해요")
+async def copy(interaction: discord.Interaction, copyword: str):
+    await interaction.message.channel.send(copyword)
 
 
 @bot.hybrid_command(name='인원통계', description="서버 인원 통계(베타)")
@@ -868,7 +790,7 @@ async def member_stats(interaction: discord.Interaction):
             role_stats[role.name] = len(role.members)
     embed = discord.Embed(title="인원통계", description=f"총 인원: {total_members}\n", color=0xFFB2F5)
     embed.add_field(name=f"각 역할별 인원: {role_stats}", value="", inline=False)
-    await interaction.send(embed=embed)
+    await interaction.message.channel.send(embed=embed)
 
 
 @bot.hybrid_command(name='이모지', description="이모지를 크게 보기")
@@ -879,25 +801,28 @@ async def emojis(interaction: discord.Interaction, *, emojsi: discord.Emoji=None
         # 임베드에 이모지를 크게 표시합니다.
         embed = discord.Embed(color=0xFFB2F5)
         embed.set_image(url=emoji_url)
-        await interaction.send(embed=embed)
+        await interaction.message.channel.send(embed=embed)
         break  # 첫 번째 이모지만 사용합니다.
+
+
 
 @bot.hybrid_command(name='도움말', description="시이봇 메뉴얼")
 async def help(interaction: discord.Interaction):
     embed = discord.Embed(title="안녕하세요, 시이입니다!", description="귀여운 챗봇 하나쯤, 시이\n'시이야'라고 불러주세요!", color=0xFFB2F5)
     embed.set_thumbnail(url='https://cdn.litt.ly/images/d7qircjSN5w6FNgD5Oh57blUjrfbBmCj?s=1200x1200&m=outside&f=webp')
-    embed.add_field(name="**일반**", value="핑, 하트, 번역, 패치노트, 계산, 인원통계, 타이머, 프로필, 급식, 메모쓰기, 메모불러오기, 공지사항, 패치노트, 카운트", inline=False)
+    embed.add_field(name="**일반**", value="핑, 번역, 패치노트, 계산, 인원통계, 타이머, 프로필, 급식, 메모쓰기, 메모불러오기, 공지사항, 패치노트", inline=False)
     embed.add_field(name="**검색**", value="네이버검색, 유튜브검색, 블로그검색, 애니검색", inline=False)
-    embed.add_field(name="**재미**", value="고양이 ,알려주기, 급식, 호감도확인, 호감도도움말, 가위바위보, 광질, 주사위, 업다운시작, 업다운, 이모지, 골라", inline=False)
+    embed.add_field(name="**재미**", value="고양이, 알려주기, 급식, 호감도확인, 호감도도움말, 가위바위보, 광질, 주사위, 이모지, 골라", inline=False)
     embed.add_field(name="**주식**", value="주식매수, 주식매도, 가격보기, 자본", inline=False)
     embed.add_field(name="**보이스**", value="음성채널입장, 음성채널퇴장", inline=False)
     embed.add_field(name="**관리**", value="내정보, 프로필, 클리어, 임베드생성, 욕설필터링", inline=False)
     embed.add_field(name="", value="", inline=False)
     embed.add_field(name="시이가 궁금하다면", value="[시이 개발 서버](https://discord.gg/SNqd5JqCzU)")
-    embed.add_field(name="시이를 서버에 초대하고 싶다면", value="[시이 초대하기](https://discord.com/oauth2/authorize?client_id=1197084521644961913&scope=bot&permissions=0)")
+    embed.add_field(name="시이를 서버에 초대하고 싶다면", value="[시이 초대하기](https://discord.com/oauth2/authorize?client_id=&scope=bot&permissions=0)")
     embed.add_field(name="개발자를 응원할려면", value="[시이 하트 눌러주기](https://koreanbots.dev/bots//vote)")
-    embed.set_footer(text="버전: v2.16.9")
-    await interaction.send(embed=embed)
+    embed.add_field(name="", value="", inline=False)
+    embed.add_field(name="**Developer** by <:export202402161150235581:1207881809405288538>studio boran", value="", inline=False)
+    await interaction.message.channel.send(embed=embed)
 
 
 @bot.hybrid_command(name='호감도도움말', description="호감도 시스템 메뉴얼")
@@ -905,58 +830,56 @@ async def hhlep(interaction: discord.Interaction):
     embed = discord.Embed(title="시이봇 호감도 시스템 도움말", color=0xFFB2F5)
     embed.add_field(name="호감도 시스템 이란?", value="호감도 시스템은 시이봇과 더 잘 지내라는 바람으로 만들었습니다!, 시이봇과 놀면서 호감도를 키워 보세요!",
                     inline=False)
-    embed.add_field(name="호감도 상승법", value="/시이야, /알려주기 커멘드에서 각각 한번 실행 시킬떄 마다 1,2 씩 상승합니다.", inline=False)
-    await interaction.send(embed=embed)
+    embed.add_field(name="호감도 상승법", value="/시이야, /가르치기 커멘드에서 각각 한번 실행 시킬떄 마다 1,2 씩 상승합니다.", inline=False)
+    await interaction.message.channel.send(embed=embed)
 
 
 @bot.hybrid_command(name='욕설필터링', description="욕설필터링기능을 끄고 킵니다.(관리자 권한 필요)")
 async def toggle_swearing_detection(interaction: discord.Interaction):
-    if interaction.author.guild_permissions.manage_messages:
+    if interaction.message.author.guild_permissions.manage_messages:
         settings.detect_swearing = not settings.detect_swearing
         save_settings()
-        await interaction.send(f"욕설 감지 기능이 {'켜졌습니다' if settings.detect_swearing else '꺼졌습니다'}.")
+        await interaction.message.channel.send(f"욕설 감지 기능이 {'켜졌습니다' if settings.detect_swearing else '꺼졌습니다'}.")
     else:
-        await interaction.send("관리자만 욕설 감지 설정을 변경할 수 있습니다.")
+        await interaction.message.channel.send("관리자만 욕설 감지 설정을 변경할 수 있습니다.")
 
 
 @bot.hybrid_command(name="골라", description="시이가 골라줍니다")
 async def ox(interaction: discord.Interaction, cho: str):
     words = cho.split()
     selected_word = random.choice(words)  # 단어 리스트에서 랜덤으로 선택
-    await interaction.send(f"저는 {selected_word} 요!")
-
+    await interaction.message.channel.send(f"저는 {selected_word} 요!")
 
 
 @bot.hybrid_command(name="패치노트", description="시이봇 패치노트 보기")
 async def pt(interaction: discord.Interaction):
-    embed = discord.Embed(title="v2.16.9 패치노트", color=0xFFB2F5)
-    embed.add_field(name="신규기능", value="오류 리포트 시스템 삭제 및 /설날 삭제, 신규 커멘드 /골라 추가", inline=False)
-    embed.add_field(name="버그 수정", value="없음", inline=False)
-    await interaction.send(embed=embed)
-
+    embed = discord.Embed(title="v2.17.10 패치노트", color=0xFFB2F5)
+    embed.add_field(name="신규기능", value="업다운 게임 및 /설날, /하트 삭제", inline=False)
+    embed.add_field(name="버그 수정", value="코드구조 수정", inline=False)
+    await interaction.message.channel.send(embed=embed)
 
 
 @bot.hybrid_command(name='가르치기', description='시이봇에게 많은걸 알려주세요!(베타)')
 async def tell(interaction: discord.Interaction, keyword: str, *, description: str):
     bot_info = load_bot_info()
     server_id = str(interaction.guild.id)
-    user_id = str(interaction.author.id)
+    user_id = str(interaction.message.author.id)
     happiness_manager.increment_user_happiness(server_id, user_id, amount=2)
     happiness_manager.save_to_file()
     print(korcen.check(keyword))
     if korcen.check(keyword) or korcen.check(description):
         embed = discord.Embed(title="그런 단어는 배우기 싫어요..", description="", color=0xFF2424)
         embed.set_footer(text="`© Korcen 을 사용하여 검열하였습니다.`")
-        await interaction.send(embed=embed)
+        await interaction.message.channel.send(embed=embed)
         return
     if keyword not in bot_info:
         bot_info[keyword] = {
             'description': description,
-            'author_nickname': interaction.author.display_name
+            'author_nickname': interaction.message.author.display_name
         }
-        await interaction.send(f"오케! `{keyword}` 라고 하면\n`{description}` 라고 할게욧!")
+        await interaction.message.channel.send(f"오케! `{keyword}` 라고 하면\n`{description}` 라고 할게욧!")
     else:
-        await interaction.send(f"`{keyword}`는 이미 알고 있다구욧!")
+        await interaction.message.channel.send(f"`{keyword}`는 이미 알고 있다구욧!")
     # 정보 저장
     save_bot_info(bot_info)
 
@@ -968,12 +891,12 @@ happiness_manager.load_from_file()
 @bot.hybrid_command(name='호감도확인', description='당신과 시이간의 호감도를 확인합니다.')
 async def check_happiness(interaction: discord.Interaction):
     server_id = str(interaction.guild.id)
-    user_id = str(interaction.author.id)
-    user_name = str(interaction.author.display_name)
+    user_id = str(interaction.message.author.id)
+    user_name = str(interaction.message.author.display_name)
     current_happiness = happiness_manager.get_user_happiness(server_id, user_id)
 
     # 호감도에 따라 메시지 조건 추가
-    if interaction.author.id == :
+    if interaction.message.author.id == :
         message = "저를 만드신 studio boran 개발자님 이시죳"
         lv = "lv.max: 개발자"
     elif 0 <= current_happiness <= 5:
@@ -988,7 +911,7 @@ async def check_happiness(interaction: discord.Interaction):
     elif 21 <= current_happiness <= 50:
         message = "우리 칭구 아이가?"
         lv = "lv.3: 친구친구"
-    elif 50 <= current_happiness:
+    else:
         message = "베프베프!"
         lv = "lv.4: 베스트 프렌즈"
     embed = discord.Embed(title=f"시이가 보는 {user_name}", color=0xFFB2F5)
@@ -996,7 +919,8 @@ async def check_happiness(interaction: discord.Interaction):
     embed.add_field(name=":speech_balloon: 시이의 한마디", value=message, inline=False)
     embed.add_field(name=f":heart: {lv}", value=f"호감도: {current_happiness}", inline=False)
     embed.set_footer(text='{}'.format(get_time()))
-    await interaction.send(embed=embed)
+    await interaction.message.channel.send(embed=embed)
+
 
 wordshii = ['넹!', '왜 그러세용?', '시이예용!', '필요 하신거 있으신가요?', '뭘 도와드릴까요?', '반가워용', '저 부르셨나요?', '왜요용', '잉', '...?', '네?']
 baddword = ['확마', '아놔', '뭐레', '이게', '나쁜말은 싫어요ㅠ']
@@ -1029,17 +953,17 @@ async def on_message(message):
                     total_member_count += guild.member_count
             word = {
                 f'{message.author.display_name}': f"저가 {message.author.display_name} 님을 모를리 없죠!",
-                '정보': f'지금 시이는 `{len(bot.guilds)}` 개의 서버에서 `{total_member_count}명` 분들을 위해 일하고 있어요!',
+                '정보': f'지금 시이는 `{len(bot.guilds)}` 개의 서버 에서 `{total_member_count}명` 분들을 위해 일하고 있어요!',
                 'hello': '안녕하세욧!',
-                '안녕': '안녕하세요. 시이입니다!',
-                '누구야': '안녕하세요. shii입니다!',
+                '안녕': '안녕하세요. 시이 입니다!',
+                '누구야': '안녕하세요. shii 입니다!',
                 '요일': ':calendar: 오늘은 {}입니다'.format(get_day_of_week()),
                 '시간': ':clock9: 현재 시간은 {}입니다.'.format(get_time()),
                 '코딩': '코딩은 재밌어요',
                 '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
                 'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
                 '이스터에그': '아직 방장님이 말 하지 말라고 했는데....아직 비밀이예욧!',
-                '패치버전': '패치버전 v2.16.9',
+                '패치버전': '패치버전 v2.17.10',
                 '과자': '음...과자하니까 과자 먹고 싶당',
                 '뭐해?': '음.....일하죠 일! 크흠',
                 '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
