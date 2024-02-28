@@ -36,7 +36,7 @@
 
 ## shii-bot 공식 사이트
 -https://litt.ly/studio_boran                           
--~~https://shii.me~~(공개예정)
+-https://shii.me
 
 ## shii-bot 공식 디스코드 서버
 -https://discord.gg/4kgq88ja                            
