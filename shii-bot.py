@@ -1,3 +1,4 @@
+import base64
 import discord
 from discord.ext import commands, tasks
 from datetime import datetime, timedelta
@@ -28,9 +29,12 @@ class Bot(commands.Bot):
         await self.change_presence(status=discord.Status.online)
         await bot.change_presence(activity=discord.CustomActivity(name='류현준 난간 듣는 중', type=5))
         await self.tree.sync()
+        try:
+            with open("12345.png", "rb") as f:
+                fi = f.read()
+        except:
+            fi = None
 
-        kb = DiscordpyKoreanbots(self,
-                                 run_task=True)
         ss = self.guilds
         print(ss)
         reset_mining_counts.start()
@@ -196,6 +200,15 @@ class Happiness:
         if os.path.exists(happiness_file_path):
             with open(happiness_file_path, 'r') as file:
                 self.users = json.load(file)
+
+    def check_happiness(self, server_id, user_id):
+        if not server_id in self.users:
+            return False
+        elif not user_id in self.users[server_id]:
+            return False
+        else:
+            return True
+
 
 
 def load_settings():
@@ -375,6 +388,7 @@ def save_capital(capital):
     with open(capital_file, 'w') as f:
         json.dump(capital, f)
 
+
 # 주식을 로드하는 함수
 def load_stocks():
     try:
@@ -412,11 +426,11 @@ previous_value = {
 # 실시간 주식 시장 시뮬레이션
 @tasks.loop(minutes=5)
 async def simulate_stock_market():
-    global stocks
+    stocks = load_stocks()
     for stock in stocks:
         # 랜덤하게 주식 가격 변동
         previous_value[stock] = stocks[stock]
-        stocks[stock] += random.randint(-200, 200)
+        stocks[stock] += random.randint(-250, 200)
         if stocks[stock] <= 0:
             stocks[stock] = 1
 
@@ -427,6 +441,7 @@ async def simulate_stock_market():
 # 주식 가격 조회 명령어
 @bot.hybrid_command(name='가격보기', description="주식가격확인")
 async def check_stock_price(interaction: discord.Interaction):
+    stocks = load_stocks()
     embed = discord.Embed(title="주식 가격", color=0xFFB2F5)
     for stock, price in stocks.items():
         if price > previous_value[stock]:
@@ -443,6 +458,7 @@ async def check_stock_price(interaction: discord.Interaction):
 async def buy_stock(interaction: discord.Interaction, name: str, quantity: int):
     server_id = str(interaction.guild.id)
     user_id = str(interaction.message.author.mention)
+    stocks = load_stocks()
     if name.upper() in stocks:
         cost = stocks[name.upper()] * quantity
         capital = load_capital()
@@ -466,7 +482,6 @@ async def buy_stock(interaction: discord.Interaction, name: str, quantity: int):
         else:
             await interaction.send('<:shiicoin:1211874282414673970> 시이코인이 부족하여 주식을 구매할 수 없습니다.')
         save_capital(capital)
-        save_stocks(user_stocks)
         save_user_stocks(user_stocks)
     else:
         await interaction.send(f'{name.upper()}은(는) 유효한 주식 기호가 아닙니다.')
@@ -476,6 +491,7 @@ async def buy_stock(interaction: discord.Interaction, name: str, quantity: int):
 async def sell_stock(interaction: discord.Interaction, stock: str, quantity: int):
     server_id = str(interaction.guild.id)
     user_id = str(interaction.message.author.mention)
+    stocks = load_stocks()
     if stock.upper() in stocks:
         capital = load_capital()
         user_stocks = load_user_stocks()
@@ -489,7 +505,6 @@ async def sell_stock(interaction: discord.Interaction, stock: str, quantity: int
             capital[server_id][user_id] += earnings
             await interaction.send(f'{stock.upper()}를 ${earnings}에 {quantity}주 판매했습니다.')
             save_capital(capital)
-            save_stocks(user_stocks)
             save_user_stocks(user_stocks)
         else:
             await interaction.send('판매할 주식이 충분하지 않습니다.')
@@ -517,7 +532,7 @@ async def check_balance(interaction: discord.Interaction):
 async def view_stocks(interaction: discord.Interaction):
     server_id = str(interaction.guild.id)
     user_id = str(interaction.message.author.mention)
-    user_stocks = load_user_stocks()  # 사용자별 보유 주식 정보를 로드합니다.
+    user_stocks = load_user_stocks()# 사용자별 보유 주식 정보를 로드합니다.
     if server_id in user_stocks and user_id in user_stocks[server_id]:
         user_stocks[server_id][user_id]['이시가전'] += 0
         save_user_stocks(user_stocks)
@@ -533,6 +548,110 @@ async def view_stocks(interaction: discord.Interaction):
         await interaction.send("보유한 주식이 없습니다.")
 
 
+def dobak_load():
+    try:
+        with open("dobak.json", "r") as file:
+            return json.load(file)
+    except FileNotFoundError:
+        return {}
+
+
+def dobak_save(data):
+    with open("dobak.json", "w") as file:
+        json.dump(data, file, indent=4)
+
+
+def dobak_check(server_id, user_id):
+    dobak = dobak_load()
+    if not server_id in dobak:
+        dobak[server_id] = {}
+        dobak_save(dobak)
+        return False
+    if not user_id in dobak[server_id]:
+        dobak[server_id][user_id] = 0
+        dobak_save(dobak)
+        return False
+    if user_id in dobak:
+        if dobak[server_id][user_id] >= 15:
+            return True
+        else:
+            return False
+    else:
+        return False
+
+
+@bot.hybrid_command(name='홀짝', description="2배이거나, 전부 잃거나")
+async def coin_flip(interaction: discord.Interaction, bet: int, choice: str):
+    if dobak_check(str(interaction.guild.id), str(interaction.message.author.mention)):
+        await interaction.send("도박중독 상담은 국번 없이 1336")
+        return
+    if not (choice == '홀' or choice == '짝'):
+        await interaction.send("홀 또는 짝을 선택하세요.")
+        return
+    if bet <= 0:
+        await interaction.send("0 이하의 금액을 걸 수 없습니다.")
+        return
+    server_id = str(interaction.guild.id)
+    user_id = str(interaction.message.author.mention)
+    capital = load_capital()
+    dobak = dobak_load()
+    if server_id not in capital:
+        capital[server_id] = {}
+    if user_id not in capital[server_id]:
+        capital[server_id][user_id] = 500
+    if capital[server_id][user_id] < bet:
+        await interaction.send("<:shiicoin:1211874282414673970> 시이코인이 부족하여 게임을 진행할 수 없습니다.")
+        return
+
+    dobak[server_id][user_id] += 1
+    capital[server_id][user_id] -= bet
+    result = random.randint(1, 100)
+    if result % 2 == 0:
+        outcome = '짝'
+    else:
+        outcome = '홀'
+    if outcome == choice:
+        capital[server_id][user_id] += bet * 2
+        await interaction.send(f"결과: {result} - {outcome}! 축하합니다! {bet * 2} <:shiicoin:1211874282414673970> 시이코인을 얻었습니다.")
+        save_capital(capital)
+        dobak_save(dobak)
+    else:
+        await interaction.send(f"결과: {result} - {outcome}! {bet} <:shiicoin:1211874282414673970> 시이코인을 잃었습니다.")
+        dobak_save(dobak)
+
+
+@bot.hybrid_command(name='주사위도박', description="주사위 수 맟추기")
+async def rolldobak(interaction: discord.Interaction, bet: int, number: int):
+    if dobak_check(str(interaction.guild.id), str(interaction.message.author.mention)):
+        await interaction.send("도박중독 상담은 국번 없이 1336")
+        return
+    if bet <= 0:
+        await interaction.send("0 이하의 금액을 걸 수 없습니다.")
+        return
+    server_id = str(interaction.guild.id)
+    user_id = str(interaction.message.author.mention)
+    capital = load_capital()
+    dobak = dobak_load()
+    if server_id not in capital:
+        capital[server_id] = {}
+    if user_id not in capital[server_id]:
+        capital[server_id][user_id] = 500
+    if capital[server_id][user_id] < bet:
+        await interaction.send("<:shiicoin:1211874282414673970> 시이코인이 부족하여 게임을 진행할 수 없습니다.")
+        return
+
+    dobak[server_id][user_id] += 1
+    capital[server_id][user_id] -= bet
+    result = random.randint(1, 6)
+    if result == number:
+        capital[server_id][user_id] += bet * 6
+        await interaction.send(f"결과: {result}! 축하합니다! {bet * 6} <:shiicoin:1211874282414673970> 시이코인을 얻었습니다.")
+        save_capital(capital)
+        dobak_save(dobak)
+    else:
+        await interaction.send(f"결과: {result}! {bet} <:shiicoin:1211874282414673970> 시이코인을 잃었습니다.")
+        dobak_save(dobak)
+
 
 @bot.hybrid_command(name="고양이", description="랜덤으로 고양이 사진을 불러옵니다")
 async def cat(interaction: discord.Interaction):
@@ -546,7 +665,7 @@ def get_random_cat():
     return data[0]['url']
 
 
-@bot.hybrid_command(name='급식', description="학교급식 2주 정보 보기")
+@bot.hybrid_command(name='급식', description="학교급식 7일 보기")
 async def school_lunch(interaction: discord.Interaction, school_name: str):
     school_code = get_school_code(school_name)
 
@@ -556,7 +675,7 @@ async def school_lunch(interaction: discord.Interaction, school_name: str):
 
         # 현재 날짜부터 30일 동안의 급식 정보 추가
         today = datetime.today()
-        for i in range(14):
+        for i in range(7):
             date = (today + timedelta(days=i)).strftime('%m%d')
             lunch_menu = get_school_lunch(school_code, date)
             if lunch_menu:
@@ -780,11 +899,47 @@ async def game(interaction: discord.Interaction, user: str):  # user:str로 !gam
 @bot.hybrid_command(name='공지사항', description="시이봇의 공지를 볼 수 있어요!")
 async def announcement(interaction: discord.Interaction):
     embed = discord.Embed(title="시이봇 공지 사항", description="2024.02.15일 공지", color=0xFFB2F5)
-    embed.add_field(name="시이봇 개발 안내", value="시이봇 점검(개발) 기간은 매일 약 오후2시 부터 오후 6시 입니다. 이때는 시이봇이 멈출수도 있으니 양해 부탁드립니다.",
-                    inline=False)
-    embed.add_field(name="/번역 관련 공지 (중요)", value="현제, /번역 커멘드는 네이버의 파파고 openapi 를 사용하여 개발하였습니다. 그러나 파파고 번역 api가 2월 29일자로 서비스가 종료되어, 2월 29일자 이후로는 /번역이 사용이 불가하여, 2월 28일자로 /번역 서비스를 종료함을 알려드립니다. 죄송합니다.",
-                    inline=False)
+    embed.add_field(name="시이 Next Plan", value="안녕하세요. studio boran의 보란이 입니다.\n우선 시이는 계속 서비스를 할 예정 입니다. 당연히 계속해서 업데이트도 진행할 예정입니다.\n"
+                                               "그리고, 시이는 5월중으로 봇 인증 절차를 밟을 예정입니다. 2달만 기다려주시면, 꼭! 인증베지 달고 오겠습니다! 아울러 75개 서버 목표 달성을 알려드리며, 저는 다음 업데이트로 찾아 뵙겠습니다!\n"
+                                               "감사합니다.", inline=False)
     await interaction.send(embed=embed)
+
+
+quest_file = '퀘스트.json'
+
+
+def load_quest():
+    try:
+        with open(quest_file, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+
+def save_quest(quest):
+    with open(quest_file, 'w') as f:
+        json.dump(quest, f)
+
+
+def serch_quest(quest_name, user, server_id):
+    quest = load_quest()
+    if not server_id in quest:
+        quest[server_id] = {}
+        save_quest(quest)
+        return True
+    if not user in quest[server_id]:
+        quest[server_id][user] = {}
+        save_quest(quest)
+        return True
+    if quest_name in quest[server_id][user]:
+        return False
+    else:
+        return True
+
+
+def DM_check_quest(quest_name):
+    return f"{quest_name} 퀘스트를 완료하였습니다!"
+
 
 
 def get_timestamp():
@@ -865,7 +1020,9 @@ async def sell(interaction: discord.Interaction):
         total_price += mineral_price
 
     await clear_minerals(str(interaction.message.author.id), interaction.guild.id)
-    await interaction.send(f"{', '.join(minerals)}을(를) 판매하여 총 {total_price} <:shiicoin:1211874282414673970> 시이코인을 획득하였습니다.")
+    element_counts = Counter(minerals)
+    output_list = [f"{element}: {count}" for element, count in element_counts.items()]
+    await interaction.send(f"{', '.join(output_list)}을(를) 판매하여 총 {total_price} <:shiicoin:1211874282414673970> 시이코인을 획득하였습니다.")
     capital = load_capital()
     user = str(interaction.message.author.mention)
     guild = str(interaction.guild.id)
@@ -890,12 +1047,12 @@ async def check_minerals(interaction: discord.Interaction):
 
 def calculate_price(mineral):
     mineral_prices = {
-        '다이아몬드': 100,   # 다이아몬드의 가격은 100
-        '루비': 80,         # 루비의 가격은 80
-        '에메랄드': 40,     # 에메랄드의 가격은 70
-        '자수정': 20,       # 자수정의 가격은 50
-        '철': 10,           # 철의 가격은 20
-        '석탄': 5          # 석탄의 가격은 10
+        '다이아몬드': 500,   # 다이아몬드의 가격은 100
+        '루비': 250,         # 루비의 가격은 80
+        '에메랄드': 100,     # 에메랄드의 가격은 70
+        '자수정': 50,       # 자수정의 가격은 50
+        '철': 25,           # 철의 가격은 20
+        '석탄': 10          # 석탄의 가격은 10
     }
     return mineral_prices.get(mineral, 0)
 
@@ -972,6 +1129,7 @@ async def dp(interaction: discord.Interaction, member: discord.Member = None):
     embed.set_image(url=member.avatar)
     await interaction.send(embed=embed)
 
+
 @bot.hybrid_command(name="내정보", description='내 정보를 봅니다')
 async def propill(interaction: discord.Interaction):
     member = interaction.message.author
@@ -1039,10 +1197,10 @@ async def emojis(interaction: discord.Interaction, *, emojsi: discord.Emoji=None
 async def help(interaction: discord.Interaction):
     embed = discord.Embed(title="안녕하세요, 시이입니다!", description="귀여운 챗봇 하나쯤, 시이\n'시이야'라고 불러주세요!", color=0xFFB2F5)
     embed.set_thumbnail(url='https://cdn.litt.ly/images/d7qircjSN5w6FNgD5Oh57blUjrfbBmCj?s=1200x1200&m=outside&f=webp')
-    embed.add_field(name="**일반**", value="핑, 번역, 패치노트, 계산, 인원통계, 타이머, 프로필, 급식, 메모쓰기, 메모불러오기, 공지사항, 패치노트", inline=False)
+    embed.add_field(name="**일반**", value="핑, 패치노트, 계산, 인원통계, 타이머, 프로필, 급식, 메모쓰기, 메모불러오기, 공지사항, 패치노트, 후원", inline=False)
     embed.add_field(name="**검색**", value="네이버검색, 유튜브검색, 블로그검색, 애니검색", inline=False)
-    embed.add_field(name="**재미**", value="출첵, 누적출석, 고양이, 알려주기, 급식, 호감도확인, 호감도도움말, 가위바위보, 광질, 주사위, 이모지, 골라", inline=False)
-    embed.add_field(name="**주식**", value="주식매수, 주식매도, 가격보기, 내시이코인, 광질, 광물확인, 광물판매", inline=False)
+    embed.add_field(name="**재미**", value="고양이, 알려주기, 급식, 호감도확인, 호감도도움말, 가위바위보, 광질, 주사위, 이모지, 골라", inline=False)
+    embed.add_field(name="**도박**", value="주식매수, 주식매도, 가격보기, 내시이코인, 광질, 광물확인, 광물판매, 홀짝, 주사위도박", inline=False)
     embed.add_field(name="**보이스**", value="음성채널입장, 음성채널퇴장", inline=False)
     embed.add_field(name="**관리**", value="찬반투표, 내정보, 프로필, 클리어, 임베드생성, 욕설필터링", inline=False)
     embed.add_field(name="", value="", inline=False)
@@ -1050,7 +1208,7 @@ async def help(interaction: discord.Interaction):
     embed.add_field(name="시이를 서버에 초대하고 싶다면", value="[시이 초대하기](https://discord.com/oauth2/authorize?client_id=1197084521644961913&scope=bot&permissions=0)")
     embed.add_field(name="개발자를 응원할려면", value="[시이 하트 눌러주기](https://koreanbots.dev/bots/1197084521644961913/vote)")
     embed.add_field(name="", value="", inline=False)
-    embed.add_field(name="**Developer** by <:export202402161150235581:1207881809405288538>studio boran", value="", inline=False)
+    embed.add_field(name="**Developer** by <:export202402161150235581:1207881809405288538> studio boran[*](https://shii.me)", value="", inline=False)
     await interaction.send(embed=embed)
 
 
@@ -1090,9 +1248,9 @@ async def ox(interaction: discord.Interaction, cho: str):
 
 @bot.hybrid_command(name="패치노트", description="시이봇 패치노트 보기")
 async def pt(interaction: discord.Interaction):
-    embed = discord.Embed(title="v2.22.15 패치노트", color=0xFFB2F5)
-    embed.add_field(name="변경 사항", value="커멘드 /번역 삭제 (사유: 번역 api 서비스 종료)", inline=False)
-    embed.add_field(name="버그 수정", value="주식 시스템에서 주식을 샀으나, /내주식 '커멘드에서 주식을 보유하고 있지 않습니다' 가 출력되는 버그 수정 (TMI: 코드 구조를 뜯어야 해서 매우 까다로웠음)", inline=False)
+    embed = discord.Embed(title="v2.23.17 패치노트", color=0xFFB2F5)
+    embed.add_field(name="변경 사항", value="커멘드 /출첵, /누적출석 임시 삭제(버그 수정 후 재공개)", inline=False)
+    embed.add_field(name="버그 수정", value="잡다한 버그 수정", inline=False)
     await interaction.send(embed=embed)
 
 
@@ -1122,7 +1280,7 @@ class MyModal(discord.ui.Modal, title="가르치기"):
         happiness_manager.increment_user_happiness(server_id, user_id, amount=2)
         happiness_manager.save_to_file()
         print(korcen.check(keyword))
-        if korcen.check(keyword) or korcen.check(description):
+        if korcen.check(keyword) or korcen.check(description) or korcen.check(f"{keyword}{description}") or korcen.check(f"{description}{keyword}"):
             embed = discord.Embed(title="그런 단어는 배우기 싫어요..", description="", color=0xFF2424)
             embed.set_footer(text="© Korcen 을 사용하여 검열하였습니다.")
             await interaction.response.send_message(embed=embed) # noqa
@@ -1157,49 +1315,17 @@ def save_counts_cnftjr(attendance_data):
         json.dump(attendance_data, f, indent=4)
 
 
-# 출석체크 기능
-@bot.hybrid_command(name='출첵', description='출석체크!(베타)')
-async def cnftjr(interaction: discord.Interaction):
-    # 오늘 날짜
-    today = datetime.now().strftime('%Y-%m-%d')
-    # 사용자 정보 로드
-    attendance_data = load_counts_cnftjr()
+@bot.hybrid_command(name='후원', description='후원 부탁...')
+async def donate(interaction: discord.Interaction):
+    a = await interaction.send("시이봇 개발자를 후원하시려면, 토스로!\n계좌: ")
+    await a.add_reaction('👍')
 
-    server_id = str(interaction.guild.id)
-    # 서버 ID를 키로 사용하여 출석체크 데이터 확인
-    if server_id not in attendance_data:
-        attendance_data[server_id] = {}
-
-    # 사용자가 이전에 출석체크를 했는지 확인
-    if str(interaction.message.author.id) not in attendance_data[server_id]:
-        attendance_data[server_id][str(interaction.message.author.id)] = {'dates': [today], 'total_attendance': 1}
-        total_attendance = attendance_data[server_id][str(interaction.message.author.id)]['total_attendance']
-        await interaction.send(f"출석체크 완료! 누적 출석 수: `{total_attendance}`")
-    else:
-        last_attendance_date = datetime.strptime(attendance_data[server_id][str(interaction.message.author.id)]['dates'][-1],
-                                                 '%Y-%m-%d')
-        if last_attendance_date < datetime.now() - timedelta(days=1):
-            # 어제 출석을 안 했을 경우
-            attendance_data[server_id][str(interaction.message.author.id)]['dates'].append(today)
-            attendance_data[server_id][str(interaction.message.author.id)]['total_attendance'] += 1
-            total_attendance = attendance_data[server_id][str(interaction.message.author.id)]['total_attendance']
-            await interaction.send(f"출석체크 완료! 누적 출석 수: `{total_attendance}`")
-        else:
-            total_attendance = attendance_data[server_id][str(interaction.message.author.id)]['total_attendance']
-            await interaction.send(f"오늘의 출석체크를 이미 하셨습니다. 누적 출석 수: `{total_attendance}`")
-
-    # 출석체크 데이터 저장
-    save_counts_cnftjr(attendance_data)
-
-@bot.hybrid_command(name='누적출석', description='누적 출석 수를 확인합니다.')
-async def snwjrcnftjr(interaction: discord.Interaction):
-    server_id = str(interaction.guild.id)
-    attendance_data = load_counts_cnftjr()
-    if server_id in attendance_data and str(interaction.message.author.id) in attendance_data[server_id]:
-        total_attendance = attendance_data[server_id][str(interaction.message.author.id)]['total_attendance']
-        await interaction.send(f"{interaction.message.author.display_name}님의 누적 출석 수는 {total_attendance}번 입니다.")
-    else:
-        await interaction.send("출석 기록이 없습니다.")
+@bot.event
+async def on_reaction_add(reaction, user):
+    if user == bot.user:
+        return
+    if reaction.emoji == '👍':
+        await reaction.message.delete()
 
 
 happiness_manager = Happiness()
@@ -1211,8 +1337,12 @@ async def check_happiness(interaction: discord.Interaction):
     server_id = str(interaction.guild.id)
     user_id = str(interaction.message.author.id)
     user_name = str(interaction.message.author.display_name)
-    current_happiness = happiness_manager.get_user_happiness(server_id, user_id)
 
+    if not happiness_manager.check_happiness(server_id, user_id):
+        await interaction.send("시이와 먼저 대화를 시작해 주세요!")
+        return
+
+    current_happiness = happiness_manager.get_user_happiness(server_id, user_id)
     # 호감도에 따라 메시지 조건 추가
     if interaction.message.author.id == :
         message = "저를 만드신 studio boran 개발자님 이시죳"
@@ -1220,15 +1350,18 @@ async def check_happiness(interaction: discord.Interaction):
     elif 0 <= current_happiness <= 5:
         message = "누구더라...흐음.."
         lv = "lv.0: 모르는 사람"
-    elif 6 <= current_happiness <= 10:
+    elif 6 <= current_happiness <= 20:
         message = "기억이 날락 말락...뭐였지"
         lv = "lv.1: 아는사람"
-    elif 11 <= current_happiness <= 20:
+    elif 21 <= current_happiness <= 40:
         message = f"{user_name}, 맞죠?!"
         lv = "lv.2: 이름 외운 사람"
-    elif 21 <= current_happiness <= 50:
+    elif 41 <= current_happiness <= 60:
+        message = f"{user_name}야!"
+        vl = "lv.3: 편하게 부르는 사이"
+    elif 61 <= current_happiness <= 120:
         message = "우리 칭구 아이가?"
-        lv = "lv.3: 친구친구"
+        lv = "lv.4: 친구친구"
     else:
         message = "베프베프!"
         lv = "lv.4: 베스트 프렌즈"
@@ -1236,8 +1369,15 @@ async def check_happiness(interaction: discord.Interaction):
     embed.set_thumbnail(url='https://cdn.litt.ly/images/d7qircjSN5w6FNgD5Oh57blUjrfbBmCj?s=1200x1200&m=outside&f=webp')
     embed.add_field(name=":speech_balloon: 시이의 한마디", value=message, inline=False)
     embed.add_field(name=f":heart: {lv}", value=f"호감도: {current_happiness}", inline=False)
+    if interaction.message.author.id == :
+        embed.add_field(name="후원자님", value="사랑합니다..", inline=False)
     embed.set_footer(text='{}'.format(get_time()))
     await interaction.send(embed=embed)
+
+@bot.hybrid_command(name='누적커멘드', description="누적커멘드 실행 수")
+async def command_ch(interaction: discord.Interaction):
+    count = load_commmand_count()
+    await interaction.send(count['카운트'])
 
 
 wordshii = ['넹!', '왜 그러세용?', '시이예용!', '필요 하신거 있으신가요?', '뭘 도와드릴까요?', '반가워용', '저 부르셨나요?', '왜요용', '잉', '...?', '네?']
@@ -1247,9 +1387,10 @@ baddword = ['확마', '아놔', '뭐레', '이게', '나쁜말은 싫어요ㅠ']
 
 @bot.event
 async def on_message(message):
-    if message.author == bot.user:
+    if message.author.bot:
+        print('???')
         return
-    if message.content.startswith('시이야'):
+    elif message.content.startswith('시이야'):
         if not message.content.startswith('시이야 '):
             wordss = random.randint(0, 10)
             await message.channel.send(wordshii[wordss])
@@ -1279,11 +1420,10 @@ async def on_message(message):
                 '코딩': '코딩은 재밌어요',
                 '게임': '게임하면 또 마크랑 원신을 빼놀수 없죠!',
                 'ㅋㅋㅋ': 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ',
-                '이스터에그': 'RYU???',
-                '이스터에그힌트': '답을 시이에게 말하면 돼요',
-                '패치버전': '패치버전 v2.22.15',
+                '이스터에그': 'https://cdn.litt.ly/images/0pAlptjWWoMFbtvSZisU30M1anU5tsHl?s=1000x440&m=outside&f=webp',
+                '이스터에그힌트': '시이 100서버 달성 ㅊㅋㅊㅋ',
+                '패치버전': '패치버전 v2.23.17',
                 '루아': '멍청이 깡통이죠',
-                'nilla': '멍청이 깡통을 만든 멍청이',
                 '과자': '음...과자하니까 과자 먹고 싶당',
                 '뭐해?': '음.....일하죠 일! 크흠',
                 '음성채널': '음성채널는 현재 방장이 돈이 없어서 불가능 합니다ㅠㅠ',
@@ -1313,7 +1453,7 @@ async def on_message(message):
                 '베타커멘드': '베타 커멘드는 현재 태스트 중인 커멘드 입니다! 언제 생기고 사라질지 모르죠',
                 '시이이모지': "<:__:1201865120368824360>",
                 '프로필': '프로필 사진은 [원본그림](https://twitter.com/suisou610/status/1637100721387741184)을 참고하여 그렸습니다.',
-                'SpecialThanks': '시이봇 개발서버 운영자 [시로](https://www.discord.com/users/1193332462403715217)님, (추가 할거임)',
+                'SpecialThanks': '시이봇 개발서버 운영자 [시로](https://www.discord.com/users/)님, 후원도 해주시고, 응원도 해주신 눈꽃설화님, 눈꽃봉수님',
                 '814': '{}'.format(get_guild_nember()),
             }
             if message1 == '' or None:
@@ -1367,4 +1507,55 @@ def get_time():
     return datetime.today().strftime("%H시 %M분 %S초")
 
 
-bot.run('')
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        return
+    elif isinstance(error, commands.MissingRequiredArgument):
+        message = await ctx.send('필요한 정보가 빠졌어요!')
+        await asyncio.sleep(5)
+        await message.delete()
+    elif isinstance(error, commands.MissingPermissions):
+        message =  await ctx.send('권한이 없어요!')
+        await asyncio.sleep(5)
+        await message.delete()
+    elif isinstance(error, commands.BotMissingPermissions):
+        message = await ctx.send('시이봇의 권한이 없어요!')
+        await asyncio.sleep(5)
+        await message.delete()
+    elif isinstance(error, commands.CommandOnCooldown):
+        message = await ctx.send(f'쿨다운 중입니다. {error.retry_after:.2f}초 후에 다시 시도해주세요.')
+        await asyncio.sleep(5)
+        await message.delete()
+    else:
+        message = discord.Embed(title='알 수 없는 오류가 발생했어요ㅠㅠ', color=0xFF0000)
+        message.set_footer(text='오류 로그는 개발자에게 전송 되었어요!')
+        message2 = await ctx.send(embed=message)
+        author = await bot.get_user().create_dm()
+        await author.send(f'에러가 발생했어요! {error}')
+        await asyncio.sleep(5)
+        await message2.delete()
+        raise error
+
+def load_commmand_count():
+    try:
+        with open('command_count.json', 'r') as f:
+            command_count = json.load(f)
+    except FileNotFoundError:
+        command_count = {}
+    return command_count
+
+def save_command_count(command_count):
+    with open('command_count.json', 'w') as f:
+        json.dump(command_count, f, indent=4)
+
+@bot.event
+async def on_command(ctx):
+    command_count = load_commmand_count()
+    if not '카운트' in command_count:
+        command_count['카운트'] = 0
+    command_count['카운트'] += 1
+    save_command_count(command_count)
+
+
+bot.run()
