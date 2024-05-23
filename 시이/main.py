@@ -50,7 +50,6 @@ previous_value = {
     '불화': 0,
     '시이전자': 0
 }
-sex = ['하앙', '아항', '하아앙', '헤응', '헤으응', '찌걱', '쑤셔주세요', '쑤셔줘요', '흐응', '헤에응','기모찌','하아아앙','해응','해으응','가버렷','오나횰','오나올','오너횰','오나욜','잣지', '보짖', '오너홀']
 wordshii = ['넹!', '왜 그러세용?', '시이예용!', '필요 하신거 있으신가요?', '뭘 도와드릴까요?', '반가워용', '저 부르셨나요?', '왜요용', '잉', '...?', '네?']
 baddword = ['확마', '아놔', '뭐레', '이게', '나쁜말은 싫어요ㅠ']
 catss = ['냥!', "냐앙", "냥냥!"]
@@ -73,7 +72,6 @@ class Bot(commands.Bot):
         await self.tree.sync()
 
         kb = DiscordpyKoreanbots(self,
-                                 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjExOTcwODQ1MjE2NDQ5NjE5MTMiLCJpYXQiOjE3MDY1OTU5Njh9.QuFjYPbPmgpygKHBjNAHGs4ITp8j3-bIeCmqvEIOw8CZ034VCeIfPM6JgBGFy0VfpfIPXXuu6OOxjyk8CbQJFRV3lerYAV9ptd_MJaRspNAMpwHjiWexwyimiOEN9nU6Ii2JhLxTT_vOydUgU_rWorAQCdMQp7RZ9HXT3mElXkY',
                                  run_task=True)
 
         ss = self.guilds
