@@ -7,7 +7,8 @@
 ## 패치버전
 - v3.0.0                         
 
-## 시이 공식 사이트                         https://shii.me
+## 시이 공식 사이트                         
+https://shii.me
 
 ## 시이 공식 디스코드 서버
 https://discord.gg/4kgq88ja                            
