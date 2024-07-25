@@ -1,3 +1,7 @@
+
+![@](https://koreanbots.dev/api/widget/bots/servers/1197084521644961913.svg?icon=true)
+![@@](https://koreanbots.dev/api/widget/bots/status/1197084521644961913.svg?icon=true)
+
 ## 안내사항
 - v3.0.0 이후 업데이트는 현재 비공개 상태이며, 추후 다음 릴리스 버전중 가장 안정적인 버전이 공개 될 예정 입니다.
 - 시이의 학습챗봇기능은 현제 pypi에 shii-study로 모듈화 되어 배포중 입니다. 자세한 내용은 https://github.com/boranloves/shii_study 에서 확인 해주세요.
