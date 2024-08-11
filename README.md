@@ -1,4 +1,4 @@
-![@](https://koreanbots.dev/api/widget/bots/servers/1197084521644961913.svg?icon=true)
+![@](https://koreanbots.dev/api/widget/bots/servers/1197084521644961913.svg?icon=true) 
 ![@@](https://koreanbots.dev/api/widget/bots/status/1197084521644961913.svg?icon=true)
 
 ## 안내사항
